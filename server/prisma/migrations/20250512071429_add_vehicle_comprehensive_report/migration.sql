@@ -1,0 +1,45 @@
+-- CreateTable
+CREATE TABLE "vehicle_comprehensive_reports" (
+    "auction_no" TEXT NOT NULL,
+    "reportQueryDate" TEXT,
+    "manufacturer" TEXT,
+    "modelYear" INTEGER,
+    "displacement" TEXT,
+    "fuelType" TEXT,
+    "detailModelName" TEXT,
+    "bodyType" TEXT,
+    "usageAndVehicleType" TEXT,
+    "firstInsuranceDate" TEXT,
+    "safetyFeaturesJson" JSONB,
+    "summaryTotalLossCount" INTEGER,
+    "summaryTheftCount" INTEGER,
+    "summaryFloodDamage" TEXT,
+    "summarySpecialUseHistory" TEXT,
+    "summaryMyCarDamageCount" INTEGER,
+    "summaryMyCarDamageAmount" BIGINT,
+    "summaryOtherCarDamageCount" INTEGER,
+    "summaryOtherCarDamageAmount" BIGINT,
+    "summaryOwnerChangeCount" INTEGER,
+    "summaryNumberChangeHistory" TEXT,
+    "specialUsageRentalHistory" TEXT,
+    "specialUsageBusinessUseHistory" TEXT,
+    "specialUsageGovernmentUseHistory" TEXT,
+    "ownerAndNumberChangesJson" JSONB,
+    "specialAccidentsTotalLossDate" TEXT,
+    "specialAccidentsTheftDate" TEXT,
+    "specialAccidentsFloodDamageDate" TEXT,
+    "insuranceAccidentsUninsuredPeriod" TEXT,
+    "insuranceAccidentsDetailsJson" JSONB,
+    "mileageHistoryJson" JSONB,
+    "freeFloodCheckResult" TEXT,
+    "freeScrapCheckResult" TEXT,
+    "recallInfoJson" JSONB,
+    "crawledAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "sourceHtmlPath" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "vehicle_comprehensive_reports_pkey" PRIMARY KEY ("auction_no")
+);
+
+-- AddForeignKey
+ALTER TABLE "vehicle_comprehensive_reports" ADD CONSTRAINT "vehicle_comprehensive_reports_auction_no_fkey" FOREIGN KEY ("auction_no") REFERENCES "AuctionBaseInfo"("auction_no") ON DELETE CASCADE ON UPDATE CASCADE;

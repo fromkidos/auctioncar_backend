@@ -1,0 +1,8 @@
+매일실행
+update_car_auctions.py 진행중인 경매 정보 업데이트 
+court_auction_car_crawler.py 매각 결과 정보 업데이트
+
+
+
+기타
+migrate_appraisal_summaries.py 현재 DB에 서장된 감정평가요항표를 분리하여 전용 테이블에 저장
