@@ -173,13 +173,21 @@ def parse_detail_page(html_content: str, case_no: str, item_no: str, pre_collect
     date_history = []
     similar_sales_stats = {}
 
+    # Parse storage location from specific span
+    storage_location_span = soup.find('span', id='mf_wfm_mainFrame_gen_carGdsDts_0_spn_carStorgPlc')
+    if storage_location_span:
+        storage_location_text = text_or_none(safe_get_text(storage_location_span))
+        if storage_location_text:
+            details['location_address'] = storage_location_text
+            details_kv['location_address'] = storage_location_text
+
     # Helper function nested inside to access soup directly
     def find_data_by_label(label_text: str, scope: Tag | None = None) -> Optional[str]:
         """Finds the sibling td/span text for a given th/label text within the scope."""
         if scope is None:
             scope = soup
 
-        label_th = scope.find('th', string=lambda t: t and label_text in t.strip())
+        label_th = scope.find('th', string=lambda t: t and re.match(label_text, t.strip()))
         if label_th and label_th.find_next_sibling('td'):
             value_td = label_th.find_next_sibling('td')
             value_span = value_td.find('span')
@@ -193,7 +201,7 @@ def parse_detail_page(html_content: str, case_no: str, item_no: str, pre_collect
                  return text_or_none(safe_get_text(value_span))
             return text_or_none(safe_get_text(value_td))
 
-        label_element = scope.find(lambda tag: tag.name in ['label', 'div', 'span', 'th'] and label_text in tag.get_text(strip=True))
+        label_element = scope.find(lambda tag: tag.name in ['label', 'div', 'span', 'th'] and re.match(label_text, tag.get_text(strip=True)))
         if label_element:
             parent_row = label_element.find_parent('tr')
             if parent_row:
@@ -216,59 +224,6 @@ def parse_detail_page(html_content: str, case_no: str, item_no: str, pre_collect
     if parsed_value_kind is not None:
         details_kv[config.LABEL_KIND] = parsed_value_kind
     details['kind'] = parsed_value_kind
-
-    raw_appraisal_price = find_data_by_label(config.LABEL_APPRAISAL_PRICE, basic_scope)
-    if raw_appraisal_price is not None:
-        details_kv[config.LABEL_APPRAISAL_PRICE] = raw_appraisal_price
-        details['appraisal_price'] = text_or_none(raw_appraisal_price.replace(',', '').replace('원', ''))
-    else:
-        details['appraisal_price'] = None
-
-    details['min_bid_price'] = None
-    details['min_bid_price_2'] = None
-    raw_min_bid_price_text_from_label = find_data_by_label(config.LABEL_MIN_BID_PRICE, basic_scope)
-    if raw_min_bid_price_text_from_label is not None:
-        details_kv[config.LABEL_MIN_BID_PRICE] = raw_min_bid_price_text_from_label
-    label_th_min_bid = basic_scope.find('th', string=lambda t: t and config.LABEL_MIN_BID_PRICE in t.strip())
-    if label_th_min_bid and label_th_min_bid.find_next_sibling('td'):
-        value_td = label_th_min_bid.find_next_sibling('td')
-        value_span = value_td.find('span') 
-        if value_span:
-            raw_html_content_for_lowest_price = ''.join(str(content) for content in value_span.contents)
-            
-            if raw_html_content_for_lowest_price:
-                text_content_without_images = re.sub(r'<img[^>]*>', '', raw_html_content_for_lowest_price)
-                price_strings = []
-                temp_soup = BeautifulSoup(text_content_without_images.replace('<br/>', '<br>'), 'html.parser')
-                current_text_parts = []
-                for content_node in temp_soup.contents:
-                    if content_node.name == 'br':
-                        if current_text_parts:
-                            price_strings.append(text_or_none(" ".join(current_text_parts).strip()))
-                            current_text_parts = []
-                    else:
-                        current_text_parts.append(content_node.get_text(strip=True) if hasattr(content_node, 'get_text') else str(content_node).strip())
-                if current_text_parts: 
-                    price_strings.append(text_or_none(" ".join(current_text_parts).strip()))
-                
-                price_strings = [p for p in price_strings if p is not None] 
-
-                def _clean_and_convert_price(price_str_with_currency):
-                    if not price_str_with_currency:
-                        return None
-                    numeric_string = re.sub(r'[^\d]', '', price_str_with_currency)
-                    return int(numeric_string) if numeric_string else None
-
-                if len(price_strings) > 0:
-                    details['min_bid_price'] = _clean_and_convert_price(price_strings[0])
-                if len(price_strings) > 1:
-                    details['min_bid_price_2'] = _clean_and_convert_price(price_strings[1])
-        
-        elif value_td and not details['min_bid_price']:
-             simple_price_text_raw = safe_get_text(value_td)
-             simple_price_text = text_or_none(simple_price_text_raw.replace(',', '').replace('원', '') if simple_price_text_raw else None)
-             if simple_price_text:
-                 details['min_bid_price'] = int(simple_price_text) if simple_price_text.isdigit() else None
 
     parsed_value_bid_method = find_data_by_label(config.LABEL_BID_METHOD, basic_scope)
     if parsed_value_bid_method is not None:

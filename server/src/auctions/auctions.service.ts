@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuctionListItemDto } from './dto/auction-list-item.dto';
 import { AuctionUserActivityDto, UpdateAuctionUserActivityDto, IncrementAuctionViewDto } from './dto/auction-user-activity.dto';
-import { AuctionHomeSummaryDto, RecentAuctionResultWithDetailsDto, MyMockBidWithAuctionDetailsDto } from './dto/auction-home-summary.dto';
+import { AuctionHomeSummaryDto } from './dto/auction-home-summary.dto';
 import { AuctionDetailDto } from './dto/auction-detail.dto';
 import { Prisma } from '@prisma/client';
 
@@ -19,6 +19,7 @@ type MockBid = any;
 type AuctionAppraisalSummary = any;
 import { CourtInfoDto } from './dto/court-info.dto';
 import { ConfigService } from '@nestjs/config';
+import { AuctionUserActivity } from '@prisma/client';
 
 // --- URL 구성에 필요한 상수 ---
 // const SERVER_BASE_URL = 'http://192.168.0.10:4000'; // 삭제: ConfigService에서 가져올 것임
@@ -72,9 +73,10 @@ function convertDataForClient(obj: any, visitedObjects = new WeakSet(), depth = 
       for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
           try {
-            // auctionBaseInfo는 이미 toAuctionListItemDtos에서 변환되었으므로, convertDataForClient를 재귀적으로 호출하지 않도록 처리
-            if (key === 'auctionBaseInfo' && obj[key] !== null && typeof obj[key] === 'object') {
-              newObj[key] = obj[key]; // 이미 DTO 형태이므로 그대로 할당
+            // auctionBaseInfo, recentAuctionResults, myMockBids는 이미 DTO 형태로 변환되었으므로, 
+            // convertDataForClient를 재귀적으로 호출하지 않고 그대로 할당합니다.
+            if ((key === 'auctionBaseInfo' || key === 'recentAuctionResults' || key === 'myMockBids') && obj[key] !== null && typeof obj[key] === 'object') {
+              newObj[key] = obj[key];
             } else {
               newObj[key] = convertDataForClient(obj[key], visitedObjects, depth + 1);
             }
@@ -198,6 +200,9 @@ export class AuctionsService {
       ? this.toWebImageUrl(auction.photoUrls[auction.representative_photo_index]?.image_path_or_url ?? auction.photoUrls[0].image_path_or_url)
       : null;
 
+    // 상세 정보와 동일하게 날짜 조정 로직 추가
+    const adjustedSaleDate = adjustDateForKstInterpretation(auction.sale_date);
+
     return {
       id: auction.auction_no,
       case_year: auction.case_year,
@@ -207,7 +212,7 @@ export class AuctionsService {
       appraisal_price: auction.appraisal_price?.toString() ?? null,
       min_bid_price: auction.min_bid_price?.toString() ?? null,
       min_bid_price_2: auction.min_bid_price_2?.toString() ?? null,
-      sale_date: auction.sale_date,
+      sale_date: adjustedSaleDate, // 조정된 날짜 사용
       status: auction.status,
       car_name: auction.car_name,
       car_model_year: auction.car_model_year,
@@ -319,197 +324,147 @@ export class AuctionsService {
   async getPopularAuctions(limit = 10): Promise<AuctionListItemDto[]> {
     const popularActivities = await this.prisma.auctionUserActivity.groupBy({
       by: ['auctionNo'],
-      _count: { auctionNo: true },
-      orderBy: { _count: { auctionNo: 'desc' } },
+      _count: {
+        auctionNo: true,
+      },
+      orderBy: {
+        _count: {
+          auctionNo: 'desc',
+        },
+      },
       take: limit,
     });
-    const auctionNos = popularActivities.map(p => p.auctionNo);
-    if (auctionNos.length === 0) return [];
     
-    const auctionsData: FullAuction[] = await this.prisma.auctionBaseInfo.findMany({
-      where: { auction_no: { in: auctionNos } },
-      include: fullAuctionInclude,
-    });
+    const auctionNos = popularActivities.map(activity => activity.auctionNo);
     
-    const sortedAuctionsData = auctionNos
-      .map(no => auctionsData.find(a => a.auction_no === no))
-      .filter((a): a is FullAuction => !!a); // 타입 가드 사용
-    return this.toAuctionListItemDtos(sortedAuctionsData);
-  }
+    if (auctionNos.length === 0) {
+      return [];
+    }
 
-  // 내 즐겨찾기/조회 경매
-  async getUserActivitySummary(userId: string): Promise<{ myFavorites: AuctionListItemDto[]; myViewed: AuctionListItemDto[] }> {
-    const favoriteActivities = await this.prisma.auctionUserActivity.findMany({
-      where: { userId, isFavorite: true },
-      select: { auctionNo: true },
-    });
-    const viewedActivities = await this.prisma.auctionUserActivity.findMany({
-      where: { userId, viewCount: { gt: 0 } },
-      select: { auctionNo: true },
-      orderBy: { lastViewed: 'desc' } 
-    });
-
-    const favNos = favoriteActivities.map(f => f.auctionNo);
-    const viewedNos = viewedActivities.map(v => v.auctionNo);
-    
-    const allNos = Array.from(new Set([...favNos, ...viewedNos]));
-    if (allNos.length === 0) return { myFavorites: [], myViewed: [] };
-
-    const auctionsData: FullAuction[] = await this.prisma.auctionBaseInfo.findMany({
+    const popularAuctions = await this.prisma.auctionBaseInfo.findMany({
       where: {
-        AND: [
-          { auction_no: { in: allNos } },
-          {
-            OR: [
-              { status: '경매진행' },
-              { status: '입찰가능' },
-              { sale_date: { gte: new Date() } },
-            ],
-          },
-        ],
+        auction_no: { in: auctionNos },
       },
       include: fullAuctionInclude,
     });
-    
-    const auctionsMap = new Map(auctionsData.map(a => [a.auction_no, a]));
 
-    const myFavoriteAuctions = favNos.map(no => auctionsMap.get(no)).filter((a): a is FullAuction => !!a);
-    const myViewedAuctions = viewedNos.map(no => auctionsMap.get(no)).filter((a): a is FullAuction => !!a);
+    // groupBy 결과 순서를 유지하기 위한 처리
+    const sortedAuctions = auctionNos.map(no => popularAuctions.find(a => a.auction_no === no)).filter(Boolean) as FullAuction[];
 
-    return {
-      myFavorites: this.toAuctionListItemDtos(myFavoriteAuctions),
-      myViewed: this.toAuctionListItemDtos(myViewedAuctions),
-    };
+    return this.toAuctionListItemDtos(sortedAuctions);
   }
 
-  // 홈 요약 정보 (인기, 내 즐겨찾기, 내 조회, 신규등록, 법원정보)
-  async getHomeSummary(userId: string): Promise<AuctionHomeSummaryDto> {
-    try {
-      // --- 1. 최근 본 경매 (AuctionUserActivity 기반) ---
-      const recentActivities = await this.prisma.auctionUserActivity.findMany({
-        where: { userId },
-        select: { auctionNo: true },
-        orderBy: { lastViewed: 'desc' },
-        take: 10,
-      });
-      const recentViewedAuctions = recentActivities.map(a => a.auctionNo);
+  // DTO 변경에 따라 myFavorites, myViewed 대신 myActivity를 반환하도록 수정
+  async getUserActivity(userId: string): Promise<AuctionUserActivity[]> {
+    if (!userId) {
+      return [];
+    }
+    return this.prisma.auctionUserActivity.findMany({
+      where: { userId: userId },
+      orderBy: { lastViewed: 'desc' },
+      take: 50, // 최근 활동 50개 제한
+    });
+  }
 
-      // --- 2. 나의 모의입찰 내역 (MockBidsService 대신 직접 조회) ---
-      const userMockBids = await this.prisma.mockBid.findMany({
-        where: { userId },
-        orderBy: { bidTime: 'desc' },
-        take: 20, // 제한 추가
+  async getHomeSummary(userId: string): Promise<AuctionHomeSummaryDto> {
+    this.logger.debug(`[getHomeSummary] 시작 - userId: ${userId}`);
+    
+    try {
+      // 1. "인기 경매" (조회수 기준) - auctionNo 배열
+      const popularAuctionsPromise = this.getPopularAuctions(50);
+
+      // 2. "나의 활동" (관심, 최근 본 경매 등) - AuctionUserActivity 객체 배열
+      const myActivityPromise = this.getUserActivity(userId);
+
+      // 3. "나의 모의 입찰" - MockBid 객체 배열
+      const myMockBidsPromise = this.prisma.mockBid.findMany({
+        where: { userId: userId },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // 4. "신규 등록" - AuctionListItemDto 객체 배열
+      const newlyRegisteredAuctionsPromise = this.prisma.auctionBaseInfo.findMany({
+        where: {
+          status: { in: ['경매진행', '입찰가능'] },
+          // 오늘 추가된 경매 (생성 시점 기준)
+          created_at: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+        },
+        include: fullAuctionInclude,
+        orderBy: {
+          created_at: 'desc'
+        },
+        take: 50, // 50개 제한
+      }).then(auctions => this.toAuctionListItemDtos(auctions));
+      
+      // 5. "최근 매각" - AuctionResult 객체 배열 (Full)
+      const recentAuctionResultsPromise = this.prisma.auctionResult.findMany({
+        where: {
+          auction_outcome: '매각',
+          updated_at: { gte: new Date(new Date().setHours(0, 0, 0, 0)) }, // 오늘 등록된 경매
+        },
         include: {
-          auction: {
+          auction: { // 'auctionBaseInfo' -> 'auction'
             include: {
-              photoUrls: { 
+              photoUrls: {
                 orderBy: { photo_index: 'asc' },
-                take: 1, // 대표 이미지만
               },
-              appraisalSummary: true,
-              auctionResult: true,
             },
           },
         },
-      });
+      }).then(results => results.map(result => {
+          const baseInfo = (result as any).auction;
+          if (baseInfo) {
+            const representativePhoto = baseInfo.photoUrls.find(p => p.photo_index === baseInfo.representative_photo_index) 
+                                      ?? baseInfo.photoUrls[0];
+            
+            (result as any).auctionBaseInfo = {
+              ...baseInfo,
+              image_url: this.toWebImageUrl(representativePhoto?.image_path_or_url)
+            };
+            delete (result as any).auction; // 원래의 'auction' 필드는 삭제
+          }
+          return result;
+      }));
 
-      const myMockBidsDtos: MyMockBidWithAuctionDetailsDto[] = [];
-      
-      for (const bid of userMockBids) {
-        try {
-          const { auction, ...restOfBid } = bid;
-          const auctionBaseInfo = this.toAuctionListItemDto(auction as FullAuction);
-          myMockBidsDtos.push({
-            ...restOfBid,
-            auctionBaseInfo,
-          });
-        } catch (error) {
-          this.logger.error(`[getHomeSummary] Error processing mock bid for user ${userId}:`, error);
-          // 에러가 발생한 경우 auctionBaseInfo를 null로 설정
-          const { auction, ...restOfBid } = bid;
-          myMockBidsDtos.push({
-            ...restOfBid,
-            auctionBaseInfo: null,
-          });
-        }
-      }
+      // 6. 법원 정보
+      const courtInfosPromise = this.prisma.courtInfo.findMany();
 
-      // --- 3. 신규 등록 경매 ---
-      const today = new Date();
-      const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const endOfToday = new Date(startOfToday);
-      endOfToday.setDate(endOfToday.getDate() + 1);
+      const [
+        popular,
+        myActivity,
+        myMockBids,
+        newlyRegisteredAuctions,
+        recentAuctionResults,
+        courtInfosRaw,
+      ] = await Promise.all([
+        popularAuctionsPromise,
+        myActivityPromise,
+        myMockBidsPromise,
+        newlyRegisteredAuctionsPromise,
+        recentAuctionResultsPromise,
+        courtInfosPromise,
+      ]);
 
-      const newlyRegisteredAuctionsData: FullAuction[] = await this.prisma.auctionBaseInfo.findMany({
-        where: {
-          updated_at: {
-            gte: startOfToday,
-            lt: endOfToday,
-          },
-        },
-        include: fullAuctionInclude,
-        orderBy: { updated_at: 'desc' },
-        take: 10,
-      });
-      const newlyRegisteredAuctions = this.toAuctionListItemDtos(newlyRegisteredAuctionsData);
+      const courtInfos = this.toCourtInfoDtos(courtInfosRaw);
+      
+      this.logger.debug('[getHomeSummary] 모든 데이터 조회 완료');
 
-      // --- 4. 최근 경매 결과 ---
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      
-      const recentResults = await this.prisma.auctionResult.findMany({
-          where: { sale_date: { gte: weekAgo } },
-          orderBy: { sale_date: 'desc' },
-          take: 10,
-      });
-
-      let recentAuctionResultsWithDetails: RecentAuctionResultWithDetailsDto[] = [];
-      if(recentResults.length > 0) {
-          const auctionNos = recentResults.map(r => r.auction_no);
-          const auctionDetailsData: FullAuction[] = await this.prisma.auctionBaseInfo.findMany({
-              where: { auction_no: { in: auctionNos } },
-              include: fullAuctionInclude,
-          });
-          const auctionDetailsMap = new Map(
-              auctionDetailsData.map(ad => [ad.auction_no, this.toAuctionListItemDto(ad)])
-          );
-
-          recentAuctionResultsWithDetails = recentResults.map(result => {
-              const auctionDetails = auctionDetailsMap.get(result.auction_no);
-              return {
-                  ...result,
-                  auctionBaseInfo: auctionDetails || null,
-              };
-          });
-      }
-      
-      // --- 5. 법원 정보 ---
-      const courtInfosData: CourtInfo[] = await this.prisma.courtInfo.findMany({
-        take: 100, // 제한 추가
-      });
-      
-      // --- 6. 사용자 활동 요약 ---
-      const userActivitySummary = await this.getUserActivitySummary(userId);
-      
-      // --- 7. 인기 경매 ---
-      const popularAuctions = await this.getPopularAuctions(10);
-      
-      const summaryDto = {
-          popular: popularAuctions,
-          myFavorites: userActivitySummary.myFavorites,
-          myViewed: userActivitySummary.myViewed,
-          myMockBids: myMockBidsDtos.map(item => convertDataForClient(item)) as MyMockBidWithAuctionDetailsDto[], 
-          newlyRegisteredAuctions,
-          recentAuctionResults: recentAuctionResultsWithDetails.map(item => convertDataForClient(item)) as RecentAuctionResultWithDetailsDto[],
-          courtInfos: this.toCourtInfoDtos(courtInfosData),
+      const summary: AuctionHomeSummaryDto = {
+        popular,
+        myActivity,
+        myMockBids,
+        newlyRegisteredAuctions,
+        recentAuctionResults,
+        courtInfos,
       };
 
-      const result = convertDataForClient(summaryDto);
-      
-      return result;
+      // `convertDataForClient`는 BigInt 등을 처리하지만, 최상위 DTO 구조를 변경하지는 않습니다.
+      // 따라서 여기서 반환하는 값은 AuctionHomeSummaryDto와 구조적으로 호환됩니다.
+      return convertDataForClient(summary);
+
     } catch (error) {
-      this.logger.error(`[getHomeSummary] Error generating home summary for user ${userId}:`, error);
-      throw new Error(`홈 요약 정보 조회 중 오류가 발생했습니다: ${error.message}`);
+      this.logger.error(`[getHomeSummary] 홈 화면 데이터 요약 생성 중 오류 발생 - userId: ${userId}`, error);
+      throw new Error('홈 화면 요약 정보를 가져오는 데 실패했습니다.');
     }
   }
 

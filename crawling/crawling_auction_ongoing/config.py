@@ -12,7 +12,7 @@ DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 't') # 환경변수 
 ITEMS_PER_PAGE = int(os.getenv('ITEMS_PER_PAGE', 40)) # Desired items per page
 DEFAULT_WAIT_TIME = int(os.getenv('DEFAULT_WAIT_TIME', 10)) # Default wait time in seconds
 MAX_ITEMS_TO_PROCESS = int(os.getenv('MAX_ITEMS_TO_PROCESS', 10)) # Limit detail processing
-PHOTO_LOAD_DELAY = float(os.getenv('PHOTO_LOAD_DELAY', 0.5)) # Delay for photo loading
+PHOTO_LOAD_DELAY = float(os.getenv('PHOTO_LOAD_DELAY', 1.5)) # Delay for photo loading
 
 # --- 프로젝트 루트 및 Public 디렉토리 설정 ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -91,7 +91,7 @@ HEADER_APPRAISAL = "감정평가요항표"
 
 # Field names used in detail page parsing by label
 LABEL_KIND = "물건종류"
-LABEL_APPRAISAL_PRICE = "감정평가액"
+LABEL_APPRAISAL_PRICE = r"감정평가액|감정가"  # 정규식 패턴으로 변경
 LABEL_MIN_BID_PRICE = "최저매각가격"
 LABEL_BID_METHOD = "입찰방법"
 LABEL_SALE_DATE_TIME_LOC = "매각기일"
@@ -158,19 +158,19 @@ APPRAISAL_POPUP_IFRAME_ID = os.getenv('APPRAISAL_POPUP_IFRAME_ID', "sbx_iframeTe
 APPRAISAL_INNER_IFRAME_SELECTOR = os.getenv('APPRAISAL_INNER_IFRAME_SELECTOR', 'iframe[id^="F"]') # 감정평가서 내부 iframe
 
 # 타임아웃 값 (초 단위)
-CRAWLING_TOTAL_TIMEOUT_SECONDS = int(os.getenv('CRAWLING_TOTAL_TIMEOUT_SECONDS', 60 * 3)) # 전체 크롤링 작업 타임아웃
+CRAWLING_TOTAL_TIMEOUT_SECONDS = int(os.getenv('CRAWLING_TOTAL_TIMEOUT_SECONDS', 60 * 10)) # 전체 크롤링 작업 타임아웃
 ITEM_PROCESSING_TIMEOUT_SECONDS = int(os.getenv('ITEM_PROCESSING_TIMEOUT_SECONDS', 60 * 3)) # 개별 아이템 처리 타임아웃 (기본 3분)
-MODAL_VISIBILITY_TIMEOUT_SECONDS = int(os.getenv('MODAL_VISIBILITY_TIMEOUT_SECONDS', 5)) # 모달 표시/사라짐 대기
-PDF_SRC_LOAD_TIMEOUT_SECONDS = int(os.getenv('PDF_SRC_LOAD_TIMEOUT_SECONDS', 10)) # PDF URL 로드 대기 
+MODAL_VISIBILITY_TIMEOUT_SECONDS = int(os.getenv('MODAL_VISIBILITY_TIMEOUT_SECONDS', 15)) # 모달 표시/사라짐 대기
+PDF_SRC_LOAD_TIMEOUT_SECONDS = int(os.getenv('PDF_SRC_LOAD_TIMEOUT_SECONDS', 15)) # PDF URL 로드 대기 
 
 # UI 액션 후 대기 시간 (페이지 크기 변경 등)
-UI_ACTION_DELAY_SECONDS = float(os.getenv('UI_ACTION_DELAY_SECONDS', 1.0)) # 초 단위 
+UI_ACTION_DELAY_SECONDS = float(os.getenv('UI_ACTION_DELAY_SECONDS', 2.0)) # 초 단위 
 
 # 오류 발생 시 재시도 전 대기 시간
-DELAY_ON_ERROR = float(os.getenv('DELAY_ON_ERROR', 3.0)) # 초 단위
+DELAY_ON_ERROR = float(os.getenv('DELAY_ON_ERROR', 5.0)) # 초 단위
 
 # 페이지 간 이동 시 대기 시간
-DELAY_BETWEEN_PAGES = float(os.getenv('DELAY_BETWEEN_PAGES', 1.0)) # 초 단위
+DELAY_BETWEEN_PAGES = float(os.getenv('DELAY_BETWEEN_PAGES', 2.0)) # 초 단위
 
 # 상세 페이지 제목에 포함될 수 있는 키워드 (목록 페이지와 구분하기 위함)
 AUCTION_DETAIL_PAGE_TITLE_KEYWORD = os.getenv('AUCTION_DETAIL_PAGE_TITLE_KEYWORD', "상세") 

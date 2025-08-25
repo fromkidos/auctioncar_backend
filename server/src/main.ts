@@ -6,9 +6,14 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { Request, Response, NextFunction } from 'express';
 import { join } from 'path';
 import helmet from 'helmet';
-import { BigIntInterceptor } from './common/interceptors/bigint.interceptor';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ConfigService } from '@nestjs/config';
+
+// BigInt serialization fix
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -81,8 +86,8 @@ async function bootstrap() {
     SwaggerModule.setup('api-docs', app, document);
   }
 
-  // BigIntInterceptor 전역 적용
-  app.useGlobalInterceptors(new BigIntInterceptor());
+  // BigIntInterceptor는 main.ts 상단의 전역 BigInt 처리 코드로 대체되었으므로 삭제합니다.
+  // app.useGlobalInterceptors(new BigIntInterceptor());
 
   const port = parseInt(configService.get<string>('PORT', '4000'), 10);
   const host = configService.get<string>('HOST', '127.0.0.1');

@@ -52,4 +52,34 @@ def retry(attempts=3, delay_seconds=1, backoff_factor=1, exceptions_to_catch=DEF
                     time.sleep(current_delay)
                     current_delay *= backoff_factor
         return wrapper
-    return decorator 
+    return decorator
+
+from selenium.common.exceptions import NoAlertPresentException, TimeoutException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+def handle_unexpected_alert(driver, timeout=2):
+    """
+    Checks for and handles an unexpected JavaScript alert.
+    Logs the alert text and accepts it.
+    Returns True if an alert was handled, False otherwise.
+    """
+    try:
+        WebDriverWait(driver, timeout).until(EC.alert_is_present())
+        alert = driver.switch_to.alert
+        alert_text = alert.text
+        logger.warning(f"예상치 못한 알림창 발견. 텍스트: '{alert_text}'. 알림창을 닫습니다.")
+        alert.accept()
+        driver.switch_to.default_content()
+        return True
+    except TimeoutException:
+        return False
+    except NoAlertPresentException:
+        return False
+    except Exception as e:
+        logger.error(f"알림창 처리 중 에러 발생: {e}", exc_info=True)
+        try:
+            driver.switch_to.default_content()
+        except Exception as e_switch:
+            logger.error(f"알림창 처리 실패 후 기본 컨텐츠로 복구 중 에러: {e_switch}")
+        return False 

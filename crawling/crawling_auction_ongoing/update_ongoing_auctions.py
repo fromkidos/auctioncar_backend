@@ -25,7 +25,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
-from .utils import retry
+from .utils import retry, handle_unexpected_alert
 
 # --- 환경변수 로드 (한 번만) ---
 dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -344,7 +344,6 @@ def process_single_auction_item(driver, wait, auction_list_page: AuctionListPage
         if not parsed_details:
             raise Exception(f"[{target}] 상세 정보 파싱 실패")
 
-        logger.debug(f"[{target}] Parsed appraisal_price from detail_page.parse_details: {parsed_details.get('appraisal_price')}")
         logger.debug(f"[{target}] Parsed Details: {str(parsed_details)[:1000]}...")
         
         with get_db_connection() as db_conn: # 메인 DB 작업용 연결
@@ -373,9 +372,9 @@ def process_single_auction_item(driver, wait, auction_list_page: AuctionListPage
                 'case_year': case_year_str,
                 'case_number': case_number_str,
                 'item_no': item_no_part,
-                'appraisal_price': parsed_details.get('appraisal_price'),
-                'min_bid_price': parsed_details.get('min_bid_price'),
-                'min_bid_price_2': parsed_details.get('min_bid_price_2'),
+                'appraisal_price': base_info.get('appraisal_price'),
+                'min_bid_price': base_info.get('min_bid_price'),
+                'min_bid_price_2': None, # 목록 페이지에는 없는 정보이므로 None으로 설정
                 'sale_date': parsed_details.get('sale_date'), 
                 'status': parsed_details.get('status_detail') or base_info.get('status'),
                 'car_name': parsed_details.get('car_name'),
@@ -542,6 +541,8 @@ def process_single_auction_item(driver, wait, auction_list_page: AuctionListPage
                 logger.error(f"[{target}] 목록으로 돌아온 후 페이지 {expected_page_for_grid_check} 그리드 로드/확인 최종 실패!")
             else:
                 logger.info(f"[{target}] 목록 페이지 {expected_page_for_grid_check} 그리드 안정화 확인 완료.")
+                if handle_unexpected_alert(driver):
+                    logger.info(f"[{target}] 목록 페이지 복귀 후 예상치 못한 알림창이 발견되어 처리했습니다.")
         else:
             logger.error(f"[{target}] 최종적으로 목록 페이지로 돌아오지 못했습니다. 그리드 확인 생략.")
         
@@ -551,6 +552,10 @@ def process_single_auction_item(driver, wait, auction_list_page: AuctionListPage
 def _process_single_page(auction_list_page: AuctionListPage, db_conn, current_page_number: int, total_pages: int, actual_items_per_page: int):
     page_start_time = time.monotonic()
     logger.info(f"페이지 처리 시작: {current_page_number}/{total_pages} (페이지당 아이템 수: {actual_items_per_page})")
+
+    if handle_unexpected_alert(auction_list_page.driver):
+        logger.info(f"페이지 {current_page_number} 처리 시작 전 알림창이 있어 처리했습니다. 1초 대기 후 진행합니다.")
+        time.sleep(1)
 
     if current_page_number > 1:
         logger.info(f"페이지 {current_page_number}로 이동 시도...")
