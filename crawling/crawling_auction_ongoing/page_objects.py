@@ -159,10 +159,9 @@ class AuctionListPage(BasePage):
                 except TimeoutException:
                     logger.warning(f"{time.strftime('%H:%M:%S')} - Active page {current_page_expected} (XPath: {active_page_xpath}) not visible within 5s. Fallback: checking for first grid row content.")
                     # 첫 번째 행의 내용 (예: 첫 번째 td의 존재)으로 그리드 로드 확인 강화
-                    first_row_content_xpath = f"#{self.results_grid_body_id} > tr[1]/td[1]" 
+                    first_row_content_css = f"#{self.results_grid_body_id} > tr:nth-child(1) > td:nth-child(1)"
                     WebDriverWait(self.driver, effective_wait_timeout).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, first_row_content_xpath)),
-                        message=f"Timeout waiting for first grid row content ({first_row_content_xpath}) presence after active page check failed."
+                        EC.presence_of_element_located((By.CSS_SELECTOR, first_row_content_css))
                     )
                     if config.DEBUG: logger.debug(f"{time.strftime('%H:%M:%S')} - First grid row content found.")
             
@@ -350,13 +349,34 @@ class AuctionListPage(BasePage):
             # 현재 보이는 페이지 번호들 중 최대값 찾기
             def get_max_visible_page(driver, pag_div):
                 current_max = 0
+                locator = (By.CSS_SELECTOR, config.PAGINATION_PAGE_NUMBER_LINK_SELECTOR)
+
                 try:
-                    page_links = pag_div.find_elements(By.CSS_SELECTOR, config.PAGINATION_PAGE_NUMBER_LINK_SELECTOR)
-                    for link in page_links:
-                        if link.text.isdigit():
-                            current_max = max(current_max, int(link.text))
+                    # 현재 보이는 페이지 번호 앵커들을 '그때그때' 다시 로케이트
+                    links = pag_div.find_elements(*locator)
+                    texts_snapshot = []
+                    for idx in range(len(links)):
+                        try:
+                            # 다시 로케이트(중요): 기존 핸들 대신 새 핸들
+                            link = pag_div.find_elements(*locator)[idx]
+                            # href가 안정적이면 href에서 숫자 파싱
+                            href = link.get_attribute("href") or ""
+                            m = re.search(r"[?&]page=(\d+)", href)
+                            if m:
+                                texts_snapshot.append(m.group(1))
+                            else:
+                                texts_snapshot.append(link.text.strip())
+                        except StaleElementReferenceException:
+                            # 해당 인덱스만 스킵
+                            continue
+
+                    for t in texts_snapshot:
+                        if t.isdigit():
+                            current_max = max(current_max, int(t))
+
                 except Exception as e_vis:
                     self.logger.warning(f"Error getting visible page numbers: {e_vis}", exc_info=config.DEBUG)
+
                 return current_max
 
             max_page_found = get_max_visible_page(self.driver, pagination_div)

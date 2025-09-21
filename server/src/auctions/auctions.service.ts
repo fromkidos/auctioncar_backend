@@ -157,6 +157,8 @@ export class AuctionsService {
   ) {}
 
   private toWebImageUrl(dbFilePath: string | null | undefined): string | null {
+    // dbFilePath가 혹시라도 전체 경로를 포함하고 있다면 파일명만 추출 (일반적으로는 파일명만 저장되어 있을 것으로 예상)
+
     try {
       if (!dbFilePath) {
         return null;
@@ -524,7 +526,8 @@ export class AuctionsService {
       // 9. 이미지 URL 처리
       const processedPhotoUrls = (photoUrls || []).map((p, index) => {
         try {
-          const webUrl = this.toWebImageUrl(p.image_path_or_url);
+          //const webUrl = this.toWebImageUrl(p.image_path_or_url);
+          const webUrl = p.image_path_or_url;
           return {
             ...p,
             image_path_or_url: webUrl,
