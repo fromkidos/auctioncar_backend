@@ -157,38 +157,31 @@ export class AuctionsService {
   ) {}
 
   private toWebImageUrl(dbFilePath: string | null | undefined): string | null {
-<<<<<<< HEAD
-    // dbFilePath가 혹시라도 전체 경로를 포함하고 있다면 파일명만 추출 (일반적으로는 파일명만 저장되어 있을 것으로 예상)
 
-    try {
-      if (!dbFilePath) {
-        return null;
-      }
-      
-      // 이미 완전한 URL인 경우 그대로 반환 (예: 외부 이미지 URL)
-      if (dbFilePath.startsWith('http://') || dbFilePath.startsWith('https://')) {
-        return dbFilePath;
-      }
-
-      const serverBaseUrl = this.configService.get<string>('SERVER_BASE_URL') || 
-        `http://${this.configService.get<string>('HOST', '127.0.0.1')}:${this.configService.get<string>('PORT', '4000')}`;
-      const staticPrefix = '/static';
-      const imageBasePath = '/uploads/auction_images/';
-      
-      // dbFilePath가 혹시라도 전체 경로를 포함하고 있다면 파일명만 추출 (일반적으로는 파일명만 저장되어 있을 것으로 예상)
-      const filename = dbFilePath.includes('/') ? dbFilePath.substring(dbFilePath.lastIndexOf('/') + 1) : dbFilePath;
-
-      const finalUrl = `${serverBaseUrl}${staticPrefix}${imageBasePath}${filename}`;
-      return finalUrl;
-    } catch (error) {
-      this.logger.error(`[toWebImageUrl] Error generating web URL for: ${dbFilePath}`, error);
-=======
+  try {
     if (!dbFilePath) {
-      this.logger.error(`[toImageFilename] Error for: ${dbFilePath}`);
->>>>>>> origin/master
       return null;
     }
-    return dbFilePath;
+    
+    // 이미 완전한 URL인 경우 그대로 반환 (예: 외부 이미지 URL)
+    if (dbFilePath.startsWith('http://') || dbFilePath.startsWith('https://')) {
+      return dbFilePath;
+    }
+
+    const serverBaseUrl = this.configService.get<string>('SERVER_BASE_URL') || 
+      `http://${this.configService.get<string>('HOST', '127.0.0.1')}:${this.configService.get<string>('PORT', '4000')}`;
+    const staticPrefix = '/static';
+    const imageBasePath = '/uploads/auction_images/';
+    
+    // dbFilePath가 혹시라도 전체 경로를 포함하고 있다면 파일명만 추출 (일반적으로는 파일명만 저장되어 있을 것으로 예상)
+    const filename = dbFilePath.includes('/') ? dbFilePath.substring(dbFilePath.lastIndexOf('/') + 1) : dbFilePath;
+
+    const finalUrl = `${serverBaseUrl}${staticPrefix}${imageBasePath}${filename}`;
+    return finalUrl;
+  } catch (error) {
+    this.logger.error(`[toWebImageUrl] Error generating web URL for: ${dbFilePath}`, error);
+    return null;
+  }
 
     // try {
     //   if (!dbFilePath) {
