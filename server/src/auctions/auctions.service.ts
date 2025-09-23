@@ -561,11 +561,16 @@ export class AuctionsService {
         throw new NotFoundException('경매 정보를 찾을 수 없습니다.');
       }
       
-      // 3. 사용자 활동 정보 조회
-      const userActivity = await this.prisma.auctionUserActivity.findUnique({
-        where: { userId_auctionNo: { userId, auctionNo: auction_no } },
-        select: { isFavorite: true },
-      });
+      // 3. 사용자 활동 정보 및 법원 정보 조회
+      const [userActivity, courtInfo] = await Promise.all([
+        this.prisma.auctionUserActivity.findUnique({
+          where: { userId_auctionNo: { userId, auctionNo: auction_no } },
+          select: { isFavorite: true },
+        }),
+        this.prisma.courtInfo.findUnique({
+          where: { court_name: baseInfoData.court_name },
+        }),
+      ]);
       
       // 4. 날짜 조정
       const adjustedSaleDate = adjustDateForKstInterpretation(baseInfoData.sale_date);
@@ -636,6 +641,7 @@ export class AuctionsService {
           }
         }),
         isFavorite: isFavorite,
+        courtInfo: courtInfo ? this.toCourtInfoDtos([courtInfo])[0] : null,
       };
       
       // 11. 최종 데이터 변환

@@ -1,18 +1,20 @@
-import { AuctionListItemDto } from './auction-list-item.dto';
 import {
-  AuctionAnalysisAccess,
+  AuctionBaseInfo,
   AuctionDetailInfo,
   DateHistory,
   PhotoURL,
   SimilarSale,
+  AuctionAnalysisAccess,
 } from '@prisma/client';
+import { CourtInfoDto } from './court-info.dto';
 
 export class AuctionDetailDto {
-  baseInfo: AuctionListItemDto;
+  baseInfo: any; // AuctionBaseInfo와 관련된 DTO로 변환될 수 있음
   detailInfo: AuctionDetailInfo | null;
   dateHistories: DateHistory[];
+  photoUrls: PhotoURL[];
   similarSales: SimilarSale[];
   analysisAccesses: AuctionAnalysisAccess[];
   isFavorite: boolean;
-  photoUrls: PhotoURL[];
+  courtInfo: CourtInfoDto | null;
 } 
