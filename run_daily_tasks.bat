@@ -1,55 +1,87 @@
-@echo OFF
-setlocal
+@echo off
+setlocal EnableExtensions EnableDelayedExpansion
 
-:: ============================================================================
-:: Daily Auction Crawling Script
-:: 매일 실행할 경매 크롤링 스크립트
-:: ============================================================================
+REM ================================================================================
+REM Daily Auction Crawling Script - simplified version (no health check)
+REM ================================================================================
 
-:: 1. 프로젝트 루트 디렉터리 설정
-::    이 파일은 backend 폴더에 있으므로, 상위 폴더(..)를 기준으로 합니다.
-set "PROJECT_DIR=%~dp0.."
-cd /d "%PROJECT_DIR%"
+REM 0) 고정 경로 및 공통 환경
+set "PROJECT_DIR=C:\projects\courtauction_car"
+set "LOG_DIR=%PROJECT_DIR%\logs"
+set "PYTHONUTF8=1"
 
-:: 2. 로그 파일 경로 설정
-::    로그 파일은 이제 backend 폴더 내에 생성됩니다.
-set "LOG_FILE=%~dp0daily_tasks.log"
+if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
+set "LOG_FILE=%LOG_DIR%\daily_tasks_%date:~0,4%-%date:~5,2%-%date:~8,2%.log"
 
-:: 3. (선택 사항) 파이썬 가상 환경(venv)의 activate.bat 파일 경로
-::    가상 환경을 사용하지 않는 경우, 이 경로는 무시됩니다.
-set "VENV_ACTIVATE=%PROJECT_DIR%\venv\Scripts\activate.bat"
+pushd "%PROJECT_DIR%"
 
-echo ================================================================================ >> %LOG_FILE%
-echo Starting daily tasks at %date% %time% >> %LOG_FILE%
-echo ================================================================================ >> %LOG_FILE%
+(
+  echo ================================================================================
+  echo Starting daily tasks at %date% %time%
+  echo PROJECT_DIR=%PROJECT_DIR%
+  echo LOG_DIR=%LOG_DIR%
+  echo USER:
+  whoami >>"%LOG_FILE%" 2>&1
+  echo CD: %CD%
+  echo ================================================================================
+)>>"%LOG_FILE%"
 
-:: 가상 환경이 존재하면 활성화
-if exist "%VENV_ACTIVATE%" (
-    echo Activating Python virtual environment... >> %LOG_FILE%
-    call "%VENV_ACTIVATE%"
+REM 1) Python 탐색 (venv 우선 → py.exe → PATH의 python.exe)
+set "VENV_PY=%PROJECT_DIR%\venv\Scripts\python.exe"
+set "PY_EXE="
+
+if exist "%VENV_PY%" (
+  set "PY_EXE=%VENV_PY%"
+  echo Using venv python: "%PY_EXE%" >>"%LOG_FILE%"
 ) else (
-    echo Virtual environment not found at "%VENV_ACTIVATE%". Using system Python. >> %LOG_FILE%
+  where py.exe >nul 2>&1
+  if not errorlevel 1 (
+    set "PY_EXE=py.exe"
+    echo Using py launcher >>"%LOG_FILE%"
+  ) else (
+    for /f "usebackq delims=" %%P in (`where python.exe 2^>nul`) do (
+      set "PY_EXE=%%P"
+      goto :FOUND_PY
+    )
+  )
 )
 
-:: 4. 스크립트를 순서대로 실행하고 결과를 로그 파일에 기록
-echo. >> %LOG_FILE%
-echo [INFO] Running update_ongoing_auctions.py... >> %LOG_FILE%
-python -m backend.crawling.crawling_auction_ongoing.update_ongoing_auctions >> %LOG_FILE% 2>&1
-echo [INFO] Finished update_ongoing_auctions.py. >> %LOG_FILE%
+:FOUND_PY
+if "%PY_EXE%"=="" (
+  echo [ERROR] Python not found. >>"%LOG_FILE%"
+  goto :END
+)
 
-echo. >> %LOG_FILE%
-echo [INFO] Running court_auction_car_crawler.py... >> %LOG_FILE%
-python -m backend.crawling.crawling_auction_result.court_auction_car_crawler >> %LOG_FILE% 2>&1
-echo [INFO] Finished court_auction_car_crawler.py. >> %LOG_FILE%
+"%PY_EXE%" -V >>"%LOG_FILE%" 2>&1
 
-echo. >> %LOG_FILE%
-echo [INFO] Running cleanup_old_auctions.py... >> %LOG_FILE%
-python -m backend.crawling.cleanup_old_auctions >> %LOG_FILE% 2>&1
-echo [INFO] Finished cleanup_old_auctions.py. >> %LOG_FILE%
+REM 2) 파이썬 모듈 실행
+set RC=0
+call :RUNPY "crawling.crawling_auction_ongoing.update_ongoing_auctions" "update_ongoing_auctions.py"
+call :RUNPY "crawling.crawling_auction_result.court_auction_car_crawler" "court_auction_car_crawler.py"
+call :RUNPY "crawling.cleanup_old_auctions" "cleanup_old_auctions.py"
 
-echo. >> %LOG_FILE%
-echo ================================================================================ >> %LOG_FILE%
-echo All tasks completed at %date% %time% >> %LOG_FILE%
-echo ================================================================================ >> %LOG_FILE%
+goto :END
 
+REM ------------------------------------------------------------------------------
+REM 함수: RUNPY <python_module> <label_for_log>
+REM ------------------------------------------------------------------------------
+:RUNPY
+set "MODULE=%~1"
+set "LABEL=%~2"
+echo. >>"%LOG_FILE%"
+echo [INFO] Running %LABEL% ... >>"%LOG_FILE%"
+"%PY_EXE%" -m %MODULE% >>"%LOG_FILE%" 2>&1
+set "STEP_RC=%ERRORLEVEL%"
+echo [INFO] Finished %LABEL%. ExitCode=!STEP_RC! >>"%LOG_FILE%"
+if not "!STEP_RC!"=="0" set RC=!STEP_RC!
+exit /b 0
+
+REM ------------------------------------------------------------------------------
+:END
+echo. >>"%LOG_FILE%"
+echo ================================================================================
+echo All tasks completed at %date% %time% (RC=%RC%) >>"%LOG_FILE%"
+echo ================================================================================ >>"%LOG_FILE%"
+
+popd
 endlocal

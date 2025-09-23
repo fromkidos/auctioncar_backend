@@ -89,9 +89,8 @@ async function bootstrap() {
   // BigIntInterceptor는 main.ts 상단의 전역 BigInt 처리 코드로 대체되었으므로 삭제합니다.
   // app.useGlobalInterceptors(new BigIntInterceptor());
 
-  const port = parseInt(configService.get<string>('PORT', '4000'), 10);
-  const host = configService.get<string>('HOST', '127.0.0.1');
-
+  const port = parseInt(configService.get<string>('PORT', '3000'), 10); // cloudflared와 일치
+  const host = configService.get<string>('HOST', '0.0.0.0');            // IPv4 전체 바인딩
   await app.listen(port, host);
   
   const serverBaseUrl = configService.get<string>('SERVER_BASE_URL') || `http://${host}:${port}`;
