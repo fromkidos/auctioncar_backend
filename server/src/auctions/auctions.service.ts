@@ -581,6 +581,7 @@ export class AuctionsService {
       // 6. 클라이언트용 데이터 준비
       const clientReadyBaseInfo = {
           ...restOfBaseInfo,
+          id: baseInfoData.auction_no, // auction_no를 id로 매핑
           sale_date: adjustedSaleDate 
       };
       
