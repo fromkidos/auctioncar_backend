@@ -403,16 +403,41 @@ export class AuctionsService {
       // 1. "인기 경매" (조회수 기준) - auctionNo 배열
       const popularAuctionsPromise = this.getPopularAuctions(50);
 
-      // 2. "나의 활동" (관심, 최근 본 경매 등) - AuctionUserActivity 객체 배열
-      const myActivityPromise = this.getUserActivity(userId);
+      // 2. "나의 즐겨찾기"
+      const myFavoritesPromise = this.prisma.auctionUserActivity
+        .findMany({
+          where: { userId: userId, isFavorite: true },
+          orderBy: { lastViewed: 'desc' },
+          take: 50,
+          include: { auction: { include: fullAuctionInclude } },
+        })
+        .then((activities) =>
+          this.toAuctionListItemDtos(
+            activities.map((a) => a.auction).filter(Boolean) as FullAuction[],
+          ),
+        );
 
-      // 3. "나의 모의 입찰" - MockBid 객체 배열
+      // 3. "내가 조회한 경매"
+      const myViewedPromise = this.prisma.auctionUserActivity
+        .findMany({
+          where: { userId: userId, viewCount: { gt: 0 } },
+          orderBy: { lastViewed: 'desc' },
+          take: 50,
+          include: { auction: { include: fullAuctionInclude } },
+        })
+        .then((activities) =>
+          this.toAuctionListItemDtos(
+            activities.map((a) => a.auction).filter(Boolean) as FullAuction[],
+          ),
+        );
+
+      // 4. "나의 모의 입찰" - MockBid 객체 배열
       const myMockBidsPromise = this.prisma.mockBid.findMany({
         where: { userId: userId },
         orderBy: { createdAt: 'desc' },
       });
 
-      // 4. "신규 등록" - AuctionListItemDto 객체 배열
+      // 5. "신규 등록" - AuctionListItemDto 객체 배열
       const newlyRegisteredAuctionsPromise = this.prisma.auctionBaseInfo.findMany({
         where: {
           status: { in: ['경매진행', '입찰가능'] },
@@ -426,7 +451,7 @@ export class AuctionsService {
         take: 50, // 50개 제한
       }).then(auctions => this.toAuctionListItemDtos(auctions));
       
-      // 5. "최근 매각" - AuctionResult 객체 배열 (Full)
+      // 6. "최근 매각" - AuctionResult 객체 배열 (Full)
       const recentAuctionResultsPromise = this.prisma.auctionResult.findMany({
         where: {
           auction_outcome: '매각',
@@ -456,19 +481,21 @@ export class AuctionsService {
           return result;
       }));
 
-      // 6. 법원 정보
+      // 7. 법원 정보
       const courtInfosPromise = this.prisma.courtInfo.findMany();
 
       const [
         popular,
-        myActivity,
+        myFavorites,
+        myViewed,
         myMockBids,
         newlyRegisteredAuctions,
         recentAuctionResults,
         courtInfosRaw,
       ] = await Promise.all([
         popularAuctionsPromise,
-        myActivityPromise,
+        myFavoritesPromise,
+        myViewedPromise,
         myMockBidsPromise,
         newlyRegisteredAuctionsPromise,
         recentAuctionResultsPromise,
@@ -479,9 +506,13 @@ export class AuctionsService {
       
       this.logger.debug('[getHomeSummary] 모든 데이터 조회 완료');
 
-      const summary: AuctionHomeSummaryDto = {
+      const summary: Omit<AuctionHomeSummaryDto, 'myActivity'> & {
+        myFavorites?: AuctionListItemDto[];
+        myViewed?: AuctionListItemDto[];
+      } = {
         popular,
-        myActivity,
+        myFavorites,
+        myViewed,
         myMockBids,
         newlyRegisteredAuctions,
         recentAuctionResults,
