@@ -447,8 +447,14 @@ export class AuctionsService {
         where: {
           status: { in: ['경매진행', '입찰가능', '신건', '유찰 1회', '유찰'] },
           OR: [
-            { created_at: { gte: todayStart } }, // 신규: 최근 오늘 생성
-            { updated_at: { gte: todayStart } },   // 정보 변경: 오늘 업데이트
+            { created_at: { gte: todayStart } }, // 신규: 오늘 생성된 경매
+            {
+              // 정보 변경: 오늘 업데이트되었지만, 오늘 생성되지 않은 경매
+              AND: [
+                { updated_at: { gte: todayStart } },
+                { created_at: { lt: todayStart } },
+              ],
+            },
           ],
         },
         include: fullAuctionInclude,
