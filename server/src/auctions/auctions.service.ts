@@ -437,12 +437,19 @@ export class AuctionsService {
         orderBy: { createdAt: 'desc' },
       });
 
-      // 5. "신규 등록" - AuctionListItemDto 객체 배열
+      // 5. "신규 등록" 및 "정보 변경" - AuctionListItemDto 객체 배열
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
       const newlyRegisteredAuctionsPromise = this.prisma.auctionBaseInfo.findMany({
         where: {
-          status: { in: ['경매진행', '입찰가능'] },
-          // 오늘 추가된 경매 (생성 시점 기준)
-          created_at: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+          status: { in: ['경매진행', '입찰가능', '신건', '유찰 1회', '유찰'] },
+          OR: [
+            { created_at: { gte: todayStart } }, // 신규: 최근 오늘 생성
+            { updated_at: { gte: todayStart } },   // 정보 변경: 오늘 업데이트
+          ],
         },
         include: fullAuctionInclude,
         orderBy: {
