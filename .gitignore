@@ -35,3 +35,5 @@ logs/
 temp/
 
 node_modules/
+debug/
+debug_updater_ongoing

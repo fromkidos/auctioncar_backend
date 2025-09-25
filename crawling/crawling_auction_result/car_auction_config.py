@@ -1,7 +1,7 @@
 import os
 
 # --- General Configuration ---
-DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+DEBUG = True  # Temporarily enable debug for HTML analysis
 ITEMS_PER_PAGE = 40  # Desired items per page
 DEBUG_DIR = 'debug'
 DEFAULT_WAIT_TIME = 30  # Default wait time in seconds
@@ -9,7 +9,7 @@ SHORT_WAIT_TIME = 5  # For quick checks
 
 # --- Filter Texts & URLs ---
 FILTER_USE_LARGE = '차량및운송장비'
-MIDDLE_CATEGORIES_TO_CRAWL = ['차량', '중기', '선박', '항공기', '이륜차']
+MIDDLE_CATEGORIES_TO_CRAWL = ['차량']  # 자동차만 크롤링 (다른 카테고리는 별도 파서 필요)
 FILTER_SALE_RESULT_SOLD = '전체'  # 매각결과 필터 값
 
 URL_FILTER = (

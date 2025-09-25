@@ -12,6 +12,8 @@ export class BillingController {
   @UseGuards(JwtAuthGuard)
   @Post('verify-purchase')
   async verifyPurchase(@Req() req, @Body() purchaseDto: VerifyPurchaseDto) {
+    console.log('[Billing] Authorization:', req.headers?.authorization ?? '(none)');
+    console.log('[Billing] req.user:', req.user ?? '(none)');
     return this.billingService.verifyPurchase(req.user as UserModel, purchaseDto);
   }
 
