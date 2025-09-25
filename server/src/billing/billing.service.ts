@@ -110,8 +110,8 @@ export class BillingService implements OnModuleInit {
       }
 
       // UNIX 타임스탬프(ms)를 Date 객체로 변환
-      const startTime = new Date(parseInt(subscriptionDetails.startTimeMillis, 10));
-      const expiryTime = new Date(parseInt(subscriptionDetails.expiryTimeMillis, 10));
+      const startTime = new Date(parseInt(subscriptionDetails.startTimeMillis || '0', 10));
+      const expiryTime = new Date(parseInt(subscriptionDetails.expiryTimeMillis || '0', 10));
 
       const updatedSubscription = await this.prisma.subscription.upsert({
         where: { userId: user.id },
@@ -121,7 +121,7 @@ export class BillingService implements OnModuleInit {
           startTime: startTime,
           expiryTime: expiryTime,
           status: 'ACTIVE', // 또는 subscriptionDetails에서 상태를 가져옴
-          autoRenewing: subscriptionDetails.autoRenewing,
+          autoRenewing: subscriptionDetails.autoRenewing ?? false,
         },
         create: {
           userId: user.id,
@@ -131,7 +131,7 @@ export class BillingService implements OnModuleInit {
           startTime: startTime,
           expiryTime: expiryTime,
           status: 'ACTIVE',
-          autoRenewing: subscriptionDetails.autoRenewing,
+          autoRenewing: subscriptionDetails.autoRenewing ?? false,
         },
       });
 
@@ -262,7 +262,7 @@ export class BillingService implements OnModuleInit {
         return;
       }
 
-      const expiryTime = new Date(parseInt(subDetails.expiryTimeMillis, 10));
+      const expiryTime = new Date(parseInt(subDetails.expiryTimeMillis || '0', 10));
       
       let status = 'UNKNOWN';
       if (subDetails.expiryTimeMillis && expiryTime > new Date()) {
@@ -280,9 +280,9 @@ export class BillingService implements OnModuleInit {
         data: {
           latestPurchaseToken: purchaseToken,
           expiryTime: expiryTime,
-          autoRenewing: subDetails.autoRenewing,
+          autoRenewing: subDetails.autoRenewing ?? false,
           status: status,
-          latestNotificationType: NotificationType[subDetails.acknowledgementState], // 예시, 실제 타입 매핑 필요
+          latestNotificationType: NotificationType[subDetails.acknowledgementState ?? NotificationType.SUBSCRIPTION_RENEWED], // 예시, 실제 타입 매핑 필요
           latestNotificationJson: subDetails as any,
         },
       });
