@@ -597,7 +597,7 @@ export class AuctionsService {
           case_received_date: adjustDateForKstInterpretation(detailInfo.case_received_date),
           auction_start_date: adjustDateForKstInterpretation(detailInfo.auction_start_date),
           distribution_due_date: adjustDateForKstInterpretation(detailInfo.distribution_due_date),
-          displacement: detailInfo.displacement,
+          displacement: baseInfoData.car_mileage, // 배기량 정보를 car_mileage에서 가져오도록 수정
       } : null;
 
       const isFavorite = userActivity?.isFavorite ?? false;

@@ -7,6 +7,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuctionsModule } from './auctions/auctions.module';
 import { ScrapingModule } from './scraping/scraping.module';
 import { MockBidsModule } from './mock-bids/mock-bids.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { MockBidsModule } from './mock-bids/mock-bids.module';
     AuctionsModule,
     ScrapingModule,
     MockBidsModule,
+    BillingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
