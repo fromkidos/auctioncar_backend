@@ -18,9 +18,25 @@ def _as_text(node, sep=" ", strip=True) -> str:
     if not node:
         return ""
     try:
-        return node.get_text(sep=sep, strip=strip)
+        # BeautifulSoup의 get_text()를 사용하여 HTML 태그를 제거하고 텍스트만 추출
+        text = node.get_text(sep=sep, strip=strip)
+        # 추가로 HTML 태그가 남아있을 경우를 대비해 정리
+        if text and ('<' in text or '>' in text):
+            # HTML 태그가 포함된 경우 BeautifulSoup로 다시 파싱하여 정리
+            from bs4 import BeautifulSoup
+            cleaned = BeautifulSoup(text, 'html.parser').get_text(sep=sep, strip=strip)
+            return cleaned
+        return text
     except Exception:
-        return str(node).strip()
+        # 예외 발생 시 문자열로 변환 후 HTML 태그 제거 시도
+        raw_str = str(node).strip()
+        if raw_str and ('<' in raw_str or '>' in raw_str):
+            try:
+                from bs4 import BeautifulSoup
+                return BeautifulSoup(raw_str, 'html.parser').get_text(sep=sep, strip=strip)
+            except Exception:
+                pass
+        return raw_str
 
 def _digits_only(s: str) -> str:
     """문자열에서 숫자/쉼표만 추려 반환."""
@@ -41,6 +57,11 @@ def _extract_after_br_text(container: Tag) -> str:
         if br and isinstance(br.next_sibling, str):
             cand = br.next_sibling.strip()
             if cand:
+                # HTML 태그가 포함되어 있을 경우 정리
+                if cand and ('<' in cand or '>' in cand):
+                    from bs4 import BeautifulSoup
+                    cleaned = BeautifulSoup(cand, 'html.parser').get_text(strip=True)
+                    return cleaned
                 return cand
         # fallback: 전체 텍스트
         return _as_text(container)
@@ -125,7 +146,23 @@ def parse_list(html: str) -> list[dict]:
             case_no_text = _as_text(cols1[1]) if len(cols1) > 1 else "N/A"
             item_no_text = _as_text(cols1[2]) if len(cols1) > 2 else "N/A"
             item_no_text = item_no_text.strip()
+            
+            # HTML 태그가 여전히 포함되어 있는 경우 강제로 제거
+            if case_no_text and ('<' in case_no_text or '>' in case_no_text):
+                from bs4 import BeautifulSoup
+                case_no_text = BeautifulSoup(case_no_text, 'html.parser').get_text(strip=True)
+            if item_no_text and ('<' in item_no_text or '>' in item_no_text):
+                from bs4 import BeautifulSoup
+                item_no_text = BeautifulSoup(item_no_text, 'html.parser').get_text(strip=True)
+            
             auction_no = f"{case_no_text}-{item_no_text}" if case_no_text != "N/A" else f"N/A-{item_no_text}"
+            
+            # 디버깅: HTML 태그가 포함된 경우 로그 출력
+            if getattr(config, "DEBUG", False):
+                if case_no_text and ('<' in case_no_text or '>' in case_no_text):
+                    logger.debug(f"DEBUG_HTML_TAGS: case_no_text contains HTML tags: {case_no_text}")
+                if item_no_text and ('<' in item_no_text or '>' in item_no_text):
+                    logger.debug(f"DEBUG_HTML_TAGS: item_no_text contains HTML tags: {item_no_text}")
 
             # -----------------------------
             # 2) 제목/차명/연식/차종 (cols1[3]의 div에서 title-like 텍스트 추정)
@@ -137,6 +174,16 @@ def parse_list(html: str) -> list[dict]:
                 raw_title_text = _extract_after_br_text(location_desc_div) or "N/A"
             else:
                 raw_title_text = _as_text(cols1[3]) if len(cols1) > 3 else "N/A"
+            
+            # HTML 태그가 여전히 포함되어 있는 경우 강제로 제거
+            if raw_title_text and ('<' in raw_title_text or '>' in raw_title_text):
+                from bs4 import BeautifulSoup
+                raw_title_text = BeautifulSoup(raw_title_text, 'html.parser').get_text(strip=True)
+            
+            # 디버깅: HTML 태그가 포함된 경우 로그 출력
+            if getattr(config, "DEBUG", False):
+                if raw_title_text and ('<' in raw_title_text or '>' in raw_title_text):
+                    logger.debug(f"DEBUG_HTML_TAGS: raw_title_text contains HTML tags: {raw_title_text}")
 
             car_name = None
             car_model_year = None
@@ -225,6 +272,21 @@ def parse_list(html: str) -> list[dict]:
                     result_status_text = parts[0] if parts else "N/A"
                     if len(parts) > 1:
                         sale_price_str = _digits_only(parts[1])
+                
+                # HTML 태그가 여전히 포함되어 있는 경우 강제로 제거
+                if result_status_text and ('<' in result_status_text or '>' in result_status_text):
+                    from bs4 import BeautifulSoup
+                    result_status_text = BeautifulSoup(result_status_text, 'html.parser').get_text(strip=True)
+                if sale_price_str and ('<' in sale_price_str or '>' in sale_price_str):
+                    from bs4 import BeautifulSoup
+                    sale_price_str = BeautifulSoup(sale_price_str, 'html.parser').get_text(strip=True)
+                
+                # 디버깅: HTML 태그가 포함된 경우 로그 출력
+                if getattr(config, "DEBUG", False):
+                    if result_status_text and ('<' in result_status_text or '>' in result_status_text):
+                        logger.debug(f"DEBUG_HTML_TAGS: result_status_text contains HTML tags: {result_status_text}")
+                    if sale_price_str and ('<' in sale_price_str or '>' in sale_price_str):
+                        logger.debug(f"DEBUG_HTML_TAGS: sale_price_str contains HTML tags: {sale_price_str}")
 
             # 차종 보정(미지정일 때 용도 기준 추정)
             if car_type is None:
@@ -274,7 +336,8 @@ def parse_list(html: str) -> list[dict]:
                 if getattr(config, "DEBUG", False):
                     logger.debug(f"DEBUG_BID_RATE: Auction No: {auction_no}, Error calculating bid rate: {e_br}. Bid rate None.")
 
-            results.append({
+            # 최종 결과 검증 및 로깅
+            final_record = {
                 'auction_no': auction_no,
                 'car_name': car_name,
                 'car_model_year': int(car_model_year) if isinstance(car_model_year, int) else None,
@@ -285,7 +348,23 @@ def parse_list(html: str) -> list[dict]:
                 'sale_price': sale_price_str or None,             # 문자열(정수형 문자열) 또는 None
                 'bid_rate': float(bid_rate) if bid_rate is not None else None,
                 'auction_outcome': result_status_text
-            })
+            }
+            
+            # 최종 결과에서 HTML 태그 강제 제거
+            for key, value in final_record.items():
+                if value and isinstance(value, str) and ('<' in value or '>' in value):
+                    from bs4 import BeautifulSoup
+                    final_record[key] = BeautifulSoup(value, 'html.parser').get_text(strip=True)
+                    if getattr(config, "DEBUG", False):
+                        logger.debug(f"DEBUG_HTML_TAGS: Cleaned final record field '{key}': {final_record[key]}")
+            
+            # 디버깅: 최종 결과에서 HTML 태그 검사
+            if getattr(config, "DEBUG", False):
+                for key, value in final_record.items():
+                    if value and isinstance(value, str) and ('<' in value or '>' in value):
+                        logger.debug(f"DEBUG_HTML_TAGS: Final record field '{key}' still contains HTML tags: {value}")
+            
+            results.append(final_record)
 
         except (AttributeError, IndexError, TypeError) as e:
             logger.error(f"Error parsing a block (base TR index {i}) for auction {auction_no}: {e}. Skipping.", exc_info=True)

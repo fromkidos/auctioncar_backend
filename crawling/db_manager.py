@@ -54,10 +54,28 @@ def get_db_connection():
             conn.close() # 항상 연결 종료
 
 def clean_string(value):
-    """문자열에서 NUL 바이트를 제거하거나, None이면 빈 문자열 반환"""
+    """문자열에서 NUL 바이트와 HTML 태그를 제거하거나, None이면 빈 문자열 반환"""
     if value is None:
         return ''
-    return str(value).replace('\x00', '').replace('\u0000', '')
+    
+    # 문자열로 변환
+    str_value = str(value)
+    
+    # NUL 바이트 제거
+    str_value = str_value.replace('\x00', '').replace('\u0000', '')
+    
+    # HTML 태그가 포함되어 있는 경우 BeautifulSoup으로 정리
+    if '<' in str_value and '>' in str_value:
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(str_value, 'html.parser')
+            str_value = soup.get_text(strip=True)
+        except Exception:
+            # BeautifulSoup 실패 시 정규식으로 HTML 태그 제거
+            import re
+            str_value = re.sub(r'<[^>]+>', '', str_value)
+    
+    return str_value
 
 def to_decimal_or_none(value, default_if_empty=None):
     """문자열을 Decimal로 변환, 실패 시 None 또는 기본값 반환. 쉼표 제거."""

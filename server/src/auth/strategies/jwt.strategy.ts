@@ -24,11 +24,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: { sub: string; email: string }): Promise<User> {
+    console.log('[JWT Strategy] Validating payload:', { sub: payload.sub, email: payload.email });
+    
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
     });
 
+    console.log('[JWT Strategy] User lookup result:', user ? `Found user ${user.id}` : 'User not found');
+
     if (!user) {
+      console.log('[JWT Strategy] User not found, throwing UnauthorizedException');
       throw new UnauthorizedException('User not found or token is invalid.');
     }
     // 필요하다면 여기서 반환되는 사용자 정보에서 민감한 정보를 제거할 수 있습니다.
