@@ -2,13 +2,16 @@ import { Injectable, BadRequestException, UnauthorizedException, ConflictExcepti
 import { PrismaService } from '../prisma/prisma.service';
 import { SocialLoginProvider, User } from '@prisma/client'; // Prisma Enum 및 User 타입 import
 import { JwtService } from '@nestjs/jwt'; // JwtService import 추가
+import { OAuth2Client } from 'google-auth-library';
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // 소셜 프로필 정보 인터페이스 (실제로는 각 소셜 SDK 응답에 맞게 정의)
 interface VerifiedSocialProfile {
   providerId: string; // 소셜 플랫폼에서의 고유 ID
   email?: string;
   profileImageUrl?: string;
-  // name?: string; // 소셜 프로필 이름은 사용자가 입력한 nickname으로 대체
+  name?: string; // 소셜 프로필 이름은 사용자가 입력한 nickname으로 대체
 }
 
 // --- 실제 소셜 토큰 검증 함수 (반드시 각 플랫폼 SDK로 구현해야 함) ---
@@ -17,21 +20,32 @@ async function verifySocialToken(
   provider: SocialLoginProvider, // Prisma Enum 사용
   token: string
 ): Promise<VerifiedSocialProfile | null> {
-  console.log(`[AuthService] Verifying token for ${provider} (token: ${token.substring(0,10)}...)`);
-  // !!!! IMPORTANT: This is a placeholder. Replace with actual SDK calls. !!!!
-  // 예: Google Sign-In, Kakao SDK, Naver SDK
-  if (provider === SocialLoginProvider.GOOGLE && token === "valid_test_token_google") { // 클라이언트에서 보내는 "valid_test_token_google"과 일치하도록 수정
-    return { 
-      providerId: "google_test_1746840385443", // 제공해주신 고정 providerId
-      email: "google_test_user@example.com",    // 제공해주신 고정 이메일
-      profileImageUrl: "http://example.com/google_profile.jpg" 
-    };
-  } else if (provider === SocialLoginProvider.KAKAO && token === "valid_test_token_kakao") {
-    return { providerId: `kakao_test_${Date.now()}`, email: "kakao_test_user@example.com" };
+  console.log(`[AuthService] Verifying token for ${provider}...`);
+  try {
+    if (provider === SocialLoginProvider.GOOGLE) {
+      const ticket = await googleClient.verifyIdToken({
+        idToken: token,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      const payload = ticket.getPayload();
+      if (!payload || !payload.sub) {
+        console.error('[AuthService] Google token verification failed: No payload or sub.');
+        return null;
+      }
+      return {
+        providerId: payload.sub,
+        email: payload.email,
+        name: payload.name,
+        profileImageUrl: payload.picture,
+      };
+    }
+    // ... 다른 소셜 로그인 제공자 처리 ...
+    console.error(`[AuthService] Token verification failed. Unsupported provider: ${provider}`);
+    return null; // 검증 실패 또는 지원하지 않는 제공자
+  } catch (error) {
+    console.error(`[AuthService] Error during token verification for ${provider}:`, error);
+    return null;
   }
-  // ... 기타 provider ...
-  console.error(`[AuthService] Token verification failed for ${provider}. Invalid test token.`);
-  return null; // 검증 실패
 }
 // --- 실제 소셜 토큰 검증 함수 끝 ---
 
@@ -63,7 +77,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid social token or failed to retrieve profile.');
     }
 
-    const { providerId, email, profileImageUrl } = verifiedProfile;
+    const { providerId, email, profileImageUrl, name } = verifiedProfile;
     console.log('[AuthService] Profile details - ProviderId:', providerId, 'Email:', email);
 
     // 2. 기존 사용자 확인
@@ -98,13 +112,15 @@ export class AuthService {
       }
 
       // 4. 새 사용자 생성
-      console.log('[AuthService] Creating new user with providerId:', providerId, 'nickname:', nickname, 'email:', email);
+      // 클라이언트에서 닉네임을 빈 값으로 보내므로, Google 프로필의 이름(name)을 기본 닉네임으로 사용
+      const finalNickname = nickname || name || `user_${Date.now()}`;
+      console.log('[AuthService] Creating new user with providerId:', providerId, 'nickname:', finalNickname, 'email:', email);
       try {
         user = await this.prisma.user.create({
           data: {
             provider,
             providerId,
-            displayName: nickname,
+            displayName: finalNickname,
             email: email,
             profileImageUrl: profileImageUrl,
           },
