@@ -74,7 +74,7 @@ export class BillingService implements OnModuleInit {
       this.logger.log('Android Publisher API client initialized successfully');
       
       // API 연결 테스트 (선택적)
-      await this.testGoogleApiConnection();
+      // await this.testGoogleApiConnection();
       
     } catch (error: any) {
       this.logger.error('Failed to initialize Android Publisher API client:', error.message);

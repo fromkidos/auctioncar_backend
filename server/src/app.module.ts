@@ -8,6 +8,7 @@ import { AuctionsModule } from './auctions/auctions.module';
 import { ScrapingModule } from './scraping/scraping.module';
 import { MockBidsModule } from './mock-bids/mock-bids.module';
 import { BillingModule } from './billing/billing.module';
+import { ProductsModule } from './products/products.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { BillingModule } from './billing/billing.module';
     ScrapingModule,
     MockBidsModule,
     BillingModule,
+    ProductsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
