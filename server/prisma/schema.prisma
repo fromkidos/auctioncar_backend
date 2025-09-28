@@ -26,6 +26,11 @@ enum PointTransactionType {
   MOCK_BID_WINNER_REWARD
 }
 
+enum ProductType {
+  POINT
+  SUBSCRIPTION
+}
+
 // --- 메인 테이블: 경매 기본 정보 ---
 model AuctionBaseInfo {
   auction_no       String    @id // 기본 키 (예: 2024타경101828-1)
@@ -398,6 +403,29 @@ model MockBid {
 }
 
 // --- 인앱 결제 및 구독 관련 모델 ---
+
+// 상품 정보 (포인트 상품 등)
+model ProductInfo {
+  id          String      @id @default(cuid())
+  productId   String      // Google Play 상품 ID (예: 'point_100', 'subscription_monthly')
+  type        ProductType // 상품 유형
+  name        String      // 상품명 (예: "100 포인트", "베이직 월간")
+  description String?     // 상품 설명
+  value       Int         // 포인트 값 또는 가격 (원 단위)
+  
+  // 구독 상품 전용 필드
+  planId      String?     // Google Play 요금제 ID (예: "monthly-plan", "monthly-plan-plus")
+  planTier    String?     // 요금제 등급 (예: "BASIC", "PREMIUM")
+  features    Json?       // 요금제 기능 목록 (JSON 배열)
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([productId, planId]) // productId + planId 조합이 unique
+  @@index([productId])
+  @@index([type])
+  @@index([planTier])
+}
 
 // 소모품 구매 내역 (예: 포인트 구매)
 model Purchase {

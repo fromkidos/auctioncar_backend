@@ -21,28 +21,86 @@ export class BillingService implements OnModuleInit {
     private readonly configService: ConfigService,
   ) {
     const keyFilePath = this.configService.get<string>('GOOGLE_APPLICATION_CREDENTIALS');
-    if (!keyFilePath || !fs.existsSync(keyFilePath)) {
-      this.logger.error('Google Service Account Key file not found. Skipping GoogleAuth initialization.');
+    this.packageName = this.configService.get<string>('ANDROID_PACKAGE_NAME', '');
+    
+    // 설정값 검증 및 상세 로깅
+    this.logger.log('=== Billing Service Configuration ===');
+    this.logger.log(`Key file path: ${keyFilePath || '(not set)'}`);
+    this.logger.log(`Package name: ${this.packageName || '(not set)'}`);
+    this.logger.log(`Key file exists: ${keyFilePath ? fs.existsSync(keyFilePath) : false}`);
+    
+    if (!keyFilePath) {
+      this.logger.error('GOOGLE_APPLICATION_CREDENTIALS environment variable is not set');
       return;
     }
     
-    this.googleAuth = new GoogleAuth({
-      keyFilename: keyFilePath,
-      scopes: ['https://www.googleapis.com/auth/androidpublisher'],
-    });
-
-    this.packageName = this.configService.get<string>('ANDROID_PACKAGE_NAME', '');
+    if (!fs.existsSync(keyFilePath)) {
+      this.logger.error(`Google Service Account Key file not found at: ${keyFilePath}`);
+      return;
+    }
+    
+    if (!this.packageName) {
+      this.logger.warn('ANDROID_PACKAGE_NAME is not set - this may cause issues with verification');
+    }
+    
+    try {
+      this.googleAuth = new GoogleAuth({
+        keyFilename: keyFilePath,
+        scopes: ['https://www.googleapis.com/auth/androidpublisher'],
+      });
+      this.logger.log('GoogleAuth initialized successfully');
+    } catch (error) {
+      this.logger.error('Failed to initialize GoogleAuth:', error.message);
+    }
   }
 
   async onModuleInit() {
+    this.logger.log('=== Billing Service Module Initialization ===');
+    
     if (!this.googleAuth) {
       this.logger.error('GoogleAuth was not initialized. Billing service will not be able to verify purchases.');
+      this.logger.error('This usually means:');
+      this.logger.error('1. GOOGLE_APPLICATION_CREDENTIALS is not set');
+      this.logger.error('2. Service account key file is missing');
+      this.logger.error('3. Service account key file has invalid format');
       return;
     }
-    this.androidPublisher = google.androidpublisher({
-      version: 'v3',
-      auth: this.googleAuth,
-    });
+    
+    try {
+      this.androidPublisher = google.androidpublisher({
+        version: 'v3',
+        auth: this.googleAuth,
+      });
+      this.logger.log('Android Publisher API client initialized successfully');
+      
+      // API 연결 테스트 (선택적)
+      await this.testGoogleApiConnection();
+      
+    } catch (error: any) {
+      this.logger.error('Failed to initialize Android Publisher API client:', error.message);
+      this.logger.error('Error stack:', error.stack);
+    }
+  }
+
+  private async testGoogleApiConnection() {
+    try {
+      this.logger.log('Testing Google API connection...');
+      
+      // 서비스 계정 정보에서 프로젝트 ID 확인
+      const keyFilePath = this.configService.get<string>('GOOGLE_APPLICATION_CREDENTIALS');
+      if (keyFilePath && fs.existsSync(keyFilePath)) {
+        const keyFileContent = JSON.parse(fs.readFileSync(keyFilePath, 'utf8'));
+        this.logger.log(`Service account project_id: ${keyFileContent.project_id}`);
+        this.logger.log(`Service account client_email: ${keyFileContent.client_email}`);
+        
+        if (keyFileContent.project_id !== 'digitalhospice') {
+          this.logger.warn(`Unexpected project_id in service account: ${keyFileContent.project_id}`);
+        }
+      }
+    } catch (error: any) {
+      this.logger.warn('Google API connection test failed (this may be normal if no test purchases exist)');
+      this.logger.warn(`Test error: ${error.message}`);
+    }
   }
 
   private async _verifyWithGoogle(purchaseDto: VerifyPurchaseDto): Promise<boolean> {
@@ -52,10 +110,12 @@ export class BillingService implements OnModuleInit {
       return false;
     }
     try {
-      this.logger.log(`Verifying with Google: ${purchaseDto.productId}, ${purchaseDto.purchaseToken}`);
+      // 클라이언트에서 받은 packageName 우선 사용, 없으면 서버 설정값 사용
+      const packageNameToUse = purchaseDto.packageName || this.packageName;
+      this.logger.log(`Verifying with Google: ${purchaseDto.productId}, ${purchaseDto.purchaseToken}, packageName: ${packageNameToUse}`);
       
       const response = await this.androidPublisher.purchases.products.get({
-        packageName: this.packageName,
+        packageName: packageNameToUse,
         productId: purchaseDto.productId,
         token: purchaseDto.purchaseToken,
       });
@@ -63,14 +123,39 @@ export class BillingService implements OnModuleInit {
       if (response.status === 200 && response.data.purchaseState === 0) {
         // purchaseState === 0 means PURCHASED
         this.logger.log('Google verification successful.');
+        this.logger.log(`Purchase details: ${JSON.stringify({
+          consumptionState: response.data.consumptionState,
+          developerPayload: response.data.developerPayload,
+          kind: response.data.kind,
+          purchaseTimeMillis: response.data.purchaseTimeMillis,
+          purchaseState: response.data.purchaseState
+        })}`);
         return true;
       } else {
         this.logger.warn(`Google verification failed. Status: ${response.status}, Data: ${JSON.stringify(response.data)}`);
         return false;
       }
-    } catch (error) {
-      this.logger.error('Error verifying purchase with Google.', error.stack);
-      // Google API가 4xx 에러를 반환하면 (예: 토큰이 유효하지 않음) 예외가 발생합니다.
+    } catch (error: any) {
+      this.logger.error('=== Google API Error Details ===');
+      this.logger.error(`Error message: ${error.message}`);
+      this.logger.error(`Error code: ${error.code || 'N/A'}`);
+      this.logger.error(`Error status: ${error.status || 'N/A'}`);
+      
+      if (error.response) {
+        this.logger.error(`Response status: ${error.response.status}`);
+        this.logger.error(`Response data: ${JSON.stringify(error.response.data)}`);
+      }
+      
+      // 특정 에러에 대한 해결 방법 제시
+      if (error.message.includes('androidpublisher.googleapis.com')) {
+        this.logger.error('SOLUTION: Enable Google Play Android Publisher API at: https://console.developers.google.com/apis/api/androidpublisher.googleapis.com/overview');
+      }
+      
+      if (error.message.includes('Service account')) {
+        this.logger.error('SOLUTION: Check service account permissions and key file');
+      }
+      
+      this.logger.error('Full error stack:', error.stack);
       return false;
     }
   }
@@ -79,31 +164,99 @@ export class BillingService implements OnModuleInit {
     purchaseDto: VerifyPurchaseDto,
   ): Promise<androidpublisher_v3.Schema$SubscriptionPurchase | null> {
     try {
-      this.logger.log(`Verifying SUBSCRIPTION with Google: ${purchaseDto.productId}, ${purchaseDto.purchaseToken}`);
+      // 클라이언트에서 받은 packageName 우선 사용, 없으면 서버 설정값 사용
+      const packageNameToUse = purchaseDto.packageName || this.packageName;
+      this.logger.log(`Verifying SUBSCRIPTION with Google: ${purchaseDto.productId}, ${purchaseDto.purchaseToken}, packageName: ${packageNameToUse}`);
       const response = await this.androidPublisher.purchases.subscriptions.get({
-        packageName: this.packageName,
+        packageName: packageNameToUse,
         subscriptionId: purchaseDto.productId,
         token: purchaseDto.purchaseToken,
       });
 
       if (response.status === 200 && response.data) {
         this.logger.log('Google subscription verification successful.');
+        this.logger.log(`Subscription details: ${JSON.stringify({
+          startTimeMillis: response.data.startTimeMillis,
+          expiryTimeMillis: response.data.expiryTimeMillis,
+          autoRenewing: response.data.autoRenewing,
+          priceCurrencyCode: response.data.priceCurrencyCode,
+          priceAmountMicros: response.data.priceAmountMicros,
+          countryCode: response.data.countryCode
+        })}`);
         return response.data;
       } else {
         this.logger.warn(`Google subscription verification failed. Status: ${response.status}, Data: ${JSON.stringify(response.data)}`);
         return null;
       }
-    } catch (error) {
-      this.logger.error('Error verifying subscription with Google.', error.stack);
+    } catch (error: any) {
+      this.logger.error('=== Google Subscription API Error Details ===');
+      this.logger.error(`Error message: ${error.message}`);
+      this.logger.error(`Error code: ${error.code || 'N/A'}`);
+      this.logger.error(`Error status: ${error.status || 'N/A'}`);
+      
+      if (error.response) {
+        this.logger.error(`Response status: ${error.response.status}`);
+        this.logger.error(`Response data: ${JSON.stringify(error.response.data)}`);
+      }
+      
+      // 특정 에러에 대한 해결 방법 제시
+      if (error.message.includes('androidpublisher.googleapis.com')) {
+        this.logger.error('SOLUTION: Enable Google Play Android Publisher API at: https://console.developers.google.com/apis/api/androidpublisher.googleapis.com/overview');
+      }
+      
+      this.logger.error('Full subscription error stack:', error.stack);
       return null;
     }
   }
 
   async verifyPurchase(user: User, purchaseDto: VerifyPurchaseDto) {
-    this.logger.log(`Verifying purchase for user ${user.id}, product ${purchaseDto.productId}`);
+    const logDetails = [
+      `user: ${user.id}`,
+      `product: ${purchaseDto.productId}`,
+      purchaseDto.planId ? `plan: ${purchaseDto.planId}` : null,
+      `package: ${purchaseDto.packageName || 'not provided'}`
+    ].filter(Boolean).join(', ');
+    
+    this.logger.log(`Verifying purchase - ${logDetails}`);
+    
+    // packageName 검증 (클라이언트에서 보낸 값과 서버 설정 비교)
+    if (purchaseDto.packageName && purchaseDto.packageName !== this.packageName) {
+      this.logger.warn(`Package name mismatch. Expected: ${this.packageName}, Received: ${purchaseDto.packageName}`);
+      throw new HttpException('Invalid package name', HttpStatus.BAD_REQUEST);
+    }
+
+    // 상품 정보 조회 (구독과 포인트 모두)
+    let productInfo;
+    if (purchaseDto.planId) {
+      // 구독 상품인 경우 productId + planId 조합으로 조회
+      productInfo = await this.prisma.productInfo.findUnique({
+        where: { 
+          productId_planId: { 
+            productId: purchaseDto.productId, 
+            planId: purchaseDto.planId 
+          } 
+        },
+      });
+    } else {
+      // 포인트 상품인 경우 productId만으로 조회
+      productInfo = await this.prisma.productInfo.findFirst({
+        where: { 
+          productId: purchaseDto.productId,
+          planId: null 
+        },
+      });
+    }
+
+    if (!productInfo) {
+      const notFoundDetails = purchaseDto.planId 
+        ? `productId: ${purchaseDto.productId}, planId: ${purchaseDto.planId}`
+        : `productId: ${purchaseDto.productId}`;
+      this.logger.warn(`Product info not found for ${notFoundDetails}`);
+      throw new HttpException('Product not found', HttpStatus.BAD_REQUEST);
+    }
 
     // --- 구독 상품 처리 ---
-    if (purchaseDto.productId === 'subscription_monthly') {
+    if (productInfo.type === 'SUBSCRIPTION') {
       const subscriptionDetails = await this._verifySubscriptionWithGoogle(purchaseDto);
       if (!subscriptionDetails) {
         throw new HttpException('Invalid subscription receipt', HttpStatus.BAD_REQUEST);
@@ -135,7 +288,7 @@ export class BillingService implements OnModuleInit {
         },
       });
 
-      this.logger.log(`Subscription for user ${user.id} is now ${updatedSubscription.status}.`);
+      this.logger.log(`Subscription '${productInfo.name}' for user ${user.id} is now ${updatedSubscription.status}.`);
       return updatedSubscription;
     }
 
@@ -168,12 +321,13 @@ export class BillingService implements OnModuleInit {
     
     this.logger.log(`New purchase ${newPurchase.id} for user ${user.id} saved.`);
 
-    if (purchaseDto.productId === 'point_100') {
+    // 포인트 지급 (이미 productInfo를 조회했으므로 재사용)
+    if (productInfo.type === 'POINT') {
       await this.prisma.user.update({
         where: { id: user.id },
-        data: { points: { increment: 100 } },
+        data: { points: { increment: productInfo.value } },
       });
-      this.logger.log(`Granted 100 points to user ${user.id}.`);
+      this.logger.log(`Granted ${productInfo.value} points to user ${user.id} for product '${productInfo.name}'.`);
     }
 
     // TODO: Google API 연동 후, 소비(consume) 로직 구현
@@ -294,7 +448,44 @@ export class BillingService implements OnModuleInit {
     }
   }
 
+  // 상품 목록 조회
+  async getProducts(type?: string, planTier?: string) {
+    const whereClause: any = {};
+    if (type) whereClause.type = type;
+    if (planTier) whereClause.planTier = planTier;
+    
+    const products = await this.prisma.productInfo.findMany({
+      where: whereClause,
+      orderBy: [
+        { type: 'asc' },      // 타입별로 먼저 정렬 (POINT -> SUBSCRIPTION)
+        { planTier: 'asc' },  // 요금제별로 정렬 (BASIC -> PREMIUM)
+        { value: 'asc' },     // 그 다음 가격순으로 정렬
+      ],
+    });
+    
+    const filterDesc = [
+      type ? `type: ${type}` : null,
+      planTier ? `planTier: ${planTier}` : null,
+    ].filter(Boolean).join(', ');
+    
+    this.logger.log(`Retrieved ${products.length} products${filterDesc ? ` (${filterDesc})` : ''}`);
+    return products;
+  }
+
   public getLogger() {
     return this.logger;
+  }
+
+  // 디버깅을 위한 설정 정보 조회 메서드
+  public getConfigInfo() {
+    const keyFilePath = this.configService.get<string>('GOOGLE_APPLICATION_CREDENTIALS');
+    return {
+      keyFilePath: keyFilePath || '(not set)',
+      keyFileExists: keyFilePath ? fs.existsSync(keyFilePath) : false,
+      packageName: this.packageName || '(not set)',
+      googleAuthInitialized: !!this.googleAuth,
+      androidPublisherInitialized: !!this.androidPublisher,
+      nodeEnv: process.env.NODE_ENV || 'development'
+    };
   }
 }

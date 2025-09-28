@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Request, Req, HttpCode } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Req, HttpCode, UsePipes, ValidationPipe, Get } from '@nestjs/common';
 import { BillingService } from './billing.service';
 import { VerifyPurchaseDto } from './dto/verify-purchase.dto';
 import { User as UserModel } from '@prisma/client';
@@ -11,10 +11,41 @@ export class BillingController {
 
   @UseGuards(JwtAuthGuard)
   @Post('verify-purchase')
+  @UsePipes(new ValidationPipe({ 
+    transform: true, 
+    whitelist: true, 
+    forbidNonWhitelisted: false // 추가 필드 허용
+  }))
   async verifyPurchase(@Req() req, @Body() purchaseDto: VerifyPurchaseDto) {
     console.log('[Billing] Authorization:', req.headers?.authorization ?? '(none)');
     console.log('[Billing] req.user:', req.user ?? '(none)');
-    return this.billingService.verifyPurchase(req.user as UserModel, purchaseDto);
+    console.log('[Billing] purchaseDto:', {
+      productId: purchaseDto.productId,
+      orderId: purchaseDto.orderId,
+      packageName: purchaseDto.packageName || '(none)',
+      purchaseToken: purchaseDto.purchaseToken ? `${purchaseDto.purchaseToken.slice(0, 10)}...` : '(none)'
+    });
+    
+    // 설정 정보 로깅 (디버깅용)
+    const configInfo = this.billingService.getConfigInfo();
+    console.log('[Billing] Service configuration:', configInfo);
+    
+    try {
+      const result = await this.billingService.verifyPurchase(req.user as UserModel, purchaseDto);
+      console.log('[Billing] Purchase verification successful for user:', req.user?.id);
+      return result;
+    } catch (error) {
+      console.error('[Billing] Purchase verification failed for user:', req.user?.id, 'Error:', error.message);
+      console.error('[Billing] Config at time of error:', configInfo);
+      throw error;
+    }
+  }
+
+  @Get('products')
+  async getProducts(@Req() req) {
+    const type = req.query?.type; // ?type=POINT 또는 ?type=SUBSCRIPTION
+    const planTier = req.query?.planTier; // ?planTier=BASIC 또는 ?planTier=PREMIUM
+    return this.billingService.getProducts(type, planTier);
   }
 
   @Post('rtdn')

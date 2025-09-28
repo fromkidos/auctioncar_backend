@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsNotEmpty } from 'class-validator';
+import { IsString, IsNumber, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class VerifyPurchaseDto {
   @IsString()
@@ -23,4 +23,12 @@ export class VerifyPurchaseDto {
   @IsString()
   @IsNotEmpty()
   originalJson: string;
+
+  @IsString()
+  @IsOptional()
+  packageName?: string;
+
+  @IsString()
+  @IsOptional()
+  planId?: string; // 구독 상품의 요금제 ID
 }
