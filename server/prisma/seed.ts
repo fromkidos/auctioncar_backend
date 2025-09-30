@@ -490,7 +490,7 @@ async function main() {
         productId: 'subscription_monthly',
         type: 'SUBSCRIPTION',
         name: '베이직 월간',
-        description: '광고 제거',
+        description: '광고 없이 경매 상세 정보 무제한 조회 + 경매 상세 정보 하단 광고 제거',
         value: 2900, // 월 2,900원
         planId: 'monthly-plan',
         planTier: 'BASIC',
@@ -500,10 +500,20 @@ async function main() {
         productId: 'subscription_monthly',
         type: 'SUBSCRIPTION',
         name: '플러스 월간',
-        description: '광고 제거 + 모델 별 최근 낙찰 정보 제공',
+        description: '베이직 혜택 + 유사 모델의 최근 낙찰 정보 제공',
         value: 3900, // 월 3,900원
         planId: 'monthly-plan-plus',
         planTier: 'PLUS',
+        features: ['광고 제거', '모델 별 최근 낙찰 정보 제공'],
+      },
+      {
+        productId: 'subscription_monthly',
+        type: 'SUBSCRIPTION',
+        name: '프리미엄 월간',
+        description: '플러스 혜택 + 홈 화면의 제휴 광고 제거',
+        value: 4900, // 월 3,900원
+        planId: 'monthly-plan-premium',
+        planTier: 'PREMIUM',
         features: ['광고 제거', '모델 별 최근 낙찰 정보 제공'],
       },
       // 정기구독 상품들 - 연간 구독
