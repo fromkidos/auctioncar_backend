@@ -218,39 +218,37 @@ export class BillingService implements OnModuleInit {
     ].filter(Boolean).join(', ');
     
     this.logger.log(`Verifying purchase - ${logDetails}`);
-    
+
+    const originalJson =
+      typeof purchaseDto.originalJson === 'string'
+        ? JSON.parse(purchaseDto.originalJson)
+        : purchaseDto.originalJson;
+
+    // Google Play의 'offerId'는 여기서 'planId'에 해당합니다.
+    const planId = originalJson?.offerId ?? purchaseDto.planId;
+
     // packageName 검증 (클라이언트에서 보낸 값과 서버 설정 비교)
     if (purchaseDto.packageName && purchaseDto.packageName !== this.packageName) {
-      this.logger.warn(`Package name mismatch. Expected: ${this.packageName}, Received: ${purchaseDto.packageName}`);
+      this.logger.warn(
+        `Package name mismatch. Expected: ${this.packageName}, Received: ${purchaseDto.packageName}`,
+      );
       throw new HttpException('Invalid package name', HttpStatus.BAD_REQUEST);
     }
 
     // 상품 정보 조회 (구독과 포인트 모두)
-    let productInfo;
-    if (purchaseDto.planId) {
-      // 구독 상품인 경우 productId + planId 조합으로 조회
-      productInfo = await this.prisma.productInfo.findUnique({
-        where: { 
-          productId_planId: { 
-            productId: purchaseDto.productId, 
-            planId: purchaseDto.planId 
-          } 
-        },
-      });
-    } else {
-      // 포인트 상품인 경우 productId만으로 조회
-      productInfo = await this.prisma.productInfo.findFirst({
-        where: { 
+    const productInfo = await this.prisma.productInfo.findUnique({
+      where: {
+        productId_planId: {
           productId: purchaseDto.productId,
-          planId: null 
+          planId: planId ?? `${purchaseDto.productId}_plan`,
         },
-      });
-    }
+      },
+    });
 
     if (!productInfo) {
-      const notFoundDetails = purchaseDto.planId 
-        ? `productId: ${purchaseDto.productId}, planId: ${purchaseDto.planId}`
-        : `productId: ${purchaseDto.productId}`;
+      const notFoundDetails = `productId: ${purchaseDto.productId}, planId: ${
+        planId ?? `${purchaseDto.productId}_plan`
+      }`;
       this.logger.warn(`Product info not found for ${notFoundDetails}`);
       throw new HttpException('Product not found', HttpStatus.BAD_REQUEST);
     }

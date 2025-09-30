@@ -456,6 +456,7 @@ async function main() {
         name: '100 포인트',
         description: '기본 포인트 팩 - 100 포인트를 추가합니다.',
         value: 100,
+        planId: 'point_100_plan',
       },
       {
         productId: 'point_500',
@@ -463,6 +464,7 @@ async function main() {
         name: '500 포인트',
         description: '인기 포인트 팩 - 500 포인트를 추가합니다.',
         value: 500,
+        planId: 'point_500_plan',
       },
       {
         productId: 'point_1000',
@@ -470,6 +472,7 @@ async function main() {
         name: '1,000 포인트',
         description: '추천 포인트 팩 - 1,000 포인트를 추가합니다.',
         value: 1000,
+        planId: 'point_1000_plan',
       },
       {
         productId: 'point_5000',
@@ -477,6 +480,7 @@ async function main() {
         name: '5,000 포인트',
         description: '프리미엄 포인트 팩 - 5,000 포인트 + 5%추가 포인트.',
         value: 5250,
+        planId: 'point_5000_plan',
       },
       {
         productId: 'point_10000',
@@ -484,6 +488,7 @@ async function main() {
         name: '10,000 포인트',
         description: '프리미엄 포인트 팩 - 10,000 포인트 + 10%추가 포인트.',
         value: 11000,
+        planId: 'point_10000_plan',
       },
       // 정기구독 상품들 - 월간 구독
       {
@@ -491,8 +496,8 @@ async function main() {
         type: 'SUBSCRIPTION',
         name: '베이직 월간',
         description: '광고 없이 경매 상세 정보 무제한 조회 + 경매 상세 정보 하단 광고 제거',
-        value: 2900, // 월 2,900원
-        planId: 'monthly-plan',
+        value: 2900,
+        planId: 'basic-monthly',
         planTier: 'BASIC',
         features: ['광고 제거'],
       },
@@ -501,8 +506,8 @@ async function main() {
         type: 'SUBSCRIPTION',
         name: '플러스 월간',
         description: '베이직 혜택 + 유사 모델의 최근 낙찰 정보 제공',
-        value: 3900, // 월 3,900원
-        planId: 'monthly-plan-plus',
+        value: 3900,
+        planId: 'plus-monthly',
         planTier: 'PLUS',
         features: ['광고 제거', '모델 별 최근 낙찰 정보 제공'],
       },
@@ -511,8 +516,8 @@ async function main() {
         type: 'SUBSCRIPTION',
         name: '프리미엄 월간',
         description: '플러스 혜택 + 홈 화면의 제휴 광고 제거',
-        value: 4900, // 월 3,900원
-        planId: 'monthly-plan-premium',
+        value: 4900,
+        planId: 'premium-monthly',
         planTier: 'PREMIUM',
         features: ['광고 제거', '모델 별 최근 낙찰 정보 제공'],
       },
