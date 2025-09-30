@@ -309,6 +309,7 @@ export class BillingService implements OnModuleInit {
       data: {
         userId: user.id,
         productId: purchaseDto.productId,
+        planId: productInfo.planId, // ✅ productInfo에서 planId 추가
         purchaseToken: purchaseDto.purchaseToken,
         orderId: purchaseDto.orderId,
         purchaseTime: new Date(purchaseDto.purchaseTime),
