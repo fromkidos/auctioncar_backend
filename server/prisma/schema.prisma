@@ -414,7 +414,7 @@ model ProductInfo {
   planId          String         @unique
   planTier        String?
   features        Json?
-  PurchaseHistory PurchaseHistory[]
+  purchases       Purchase[]
 
   @@id([productId, planId])
   @@map("product_infos")
@@ -427,6 +427,9 @@ model Purchase {
   user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   productId            String    // 예: 'point_100'
+  planId               String?   // 예: 'point_100_plan', 'basic-monthly'
+  product              ProductInfo @relation(fields: [productId, planId], references: [productId, planId])
+
   purchaseToken        String    @unique // Google Play에서 제공하는 고유 토큰
   purchaseTime         DateTime
   orderId              String    @unique // Google Play 주문 ID
