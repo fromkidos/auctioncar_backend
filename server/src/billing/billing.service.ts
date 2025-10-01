@@ -209,6 +209,36 @@ export class BillingService implements OnModuleInit {
     }
   }
 
+  // v2 API: get offer/basePlan identifiers from Google response
+  private async _verifySubscriptionV2WithGoogle(
+    purchaseDto: VerifyPurchaseDto,
+  ): Promise<androidpublisher_v3.Schema$SubscriptionPurchaseV2 | null> {
+    try {
+      const packageNameToUse = purchaseDto.packageName || this.packageName;
+      this.logger.log(`Verifying SUBSCRIPTION v2 with Google: token=${purchaseDto.purchaseToken}, packageName: ${packageNameToUse}`);
+      const response = await this.androidPublisher.purchases.subscriptionsv2.get({
+        packageName: packageNameToUse,
+        token: purchaseDto.purchaseToken,
+      });
+      if (response.status === 200 && response.data) {
+        this.logger.log(`Subscription v2 details: ${JSON.stringify({
+          lineItems: response.data.lineItems?.length ?? 0,
+        })}`);
+        return response.data as androidpublisher_v3.Schema$SubscriptionPurchaseV2;
+      }
+      this.logger.warn(`Google subscription v2 verification failed. Status: ${response.status}, Data: ${JSON.stringify(response.data)}`);
+      return null;
+    } catch (error: any) {
+      this.logger.error('=== Google Subscription v2 API Error ===');
+      this.logger.error(`Error message: ${error.message}`);
+      if (error.response) {
+        this.logger.error(`Response status: ${error.response.status}`);
+        this.logger.error(`Response data: ${JSON.stringify(error.response.data)}`);
+      }
+      return null;
+    }
+  }
+
   async verifyPurchase(user: User, purchaseDto: VerifyPurchaseDto) {
     const logDetails = [
       `user: ${user.id}`,
@@ -224,12 +254,23 @@ export class BillingService implements OnModuleInit {
         ? JSON.parse(purchaseDto.originalJson)
         : purchaseDto.originalJson;
 
-    // Google Play의 'offerId'는 여기서 'planId'에 해당합니다.
-    const planId = originalJson?.offerId ?? purchaseDto.planId;
+    // Try to derive planId from Google v2 subscription API first
+    let derivedPlanId: string | null = null;
+    const v2 = await this._verifySubscriptionV2WithGoogle(purchaseDto);
+    if (v2 && Array.isArray(v2.lineItems) && v2.lineItems.length > 0) {
+      const li: any = v2.lineItems[0];
+      const offerId: string | null = li?.offerDetails?.offerId ?? null;
+      const basePlanId: string | null = li?.offerDetails?.basePlanId ?? null;
+      derivedPlanId = offerId || basePlanId || null;
+    }
+
+    // Fallbacks: client-provided or legacy originalJson field (if any)
+    const planId = derivedPlanId ?? originalJson?.offerId ?? purchaseDto.planId ?? null;
     
     // 디버깅을 위한 로그 추가
     this.logger.log(`originalJson: ${JSON.stringify(originalJson)}`);
-    this.logger.log(`extracted planId: ${planId}`);
+    this.logger.log(`extracted planId (v2/derived): ${derivedPlanId}`);
+    this.logger.log(`final planId used: ${planId}`);
     this.logger.log(`purchaseDto.planId: ${purchaseDto.planId}`);
 
     // packageName 검증 (클라이언트에서 보낸 값과 서버 설정 비교)
