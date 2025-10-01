@@ -320,6 +320,8 @@ model Subscription {
   id                     String   @id @default(cuid())
   userId                 String   @unique
   productId              String
+  planId                 String?  // 구독 등급 ID (basic-monthly, plus-monthly, premium-monthly)
+  planTier               String?  // 구독 등급 (BASIC, PLUS, PREMIUM)
   originalPurchaseToken  String   @unique
   latestPurchaseToken    String
   startTime              DateTime
@@ -334,6 +336,7 @@ model Subscription {
 
   @@index([userId])
   @@index([productId])
+  @@index([planTier])
   @@index([expiryTime])
   @@index([status])
 }

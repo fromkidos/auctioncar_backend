@@ -226,6 +226,11 @@ export class BillingService implements OnModuleInit {
 
     // Google Play의 'offerId'는 여기서 'planId'에 해당합니다.
     const planId = originalJson?.offerId ?? purchaseDto.planId;
+    
+    // 디버깅을 위한 로그 추가
+    this.logger.log(`originalJson: ${JSON.stringify(originalJson)}`);
+    this.logger.log(`extracted planId: ${planId}`);
+    this.logger.log(`purchaseDto.planId: ${purchaseDto.planId}`);
 
     // packageName 검증 (클라이언트에서 보낸 값과 서버 설정 비교)
     if (purchaseDto.packageName && purchaseDto.packageName !== this.packageName) {
@@ -280,6 +285,8 @@ export class BillingService implements OnModuleInit {
         where: { userId: user.id },
         update: {
           productId: purchaseDto.productId,
+          planId: planId,
+          planTier: productInfo.planTier,
           latestPurchaseToken: purchaseDto.purchaseToken,
           startTime: startTime,
           expiryTime: expiryTime,
@@ -289,6 +296,8 @@ export class BillingService implements OnModuleInit {
         create: {
           userId: user.id,
           productId: purchaseDto.productId,
+          planId: planId,
+          planTier: productInfo.planTier,
           originalPurchaseToken: purchaseDto.purchaseToken, // 최초 생성 시에는 동일
           latestPurchaseToken: purchaseDto.purchaseToken,
           startTime: startTime,
