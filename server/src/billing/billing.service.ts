@@ -236,19 +236,33 @@ export class BillingService implements OnModuleInit {
     }
 
     // 상품 정보 조회 (구독과 포인트 모두)
-    const productInfo = await this.prisma.productInfo.findUnique({
-      where: {
-        productId_planId: {
-          productId: purchaseDto.productId,
-          planId: planId ?? `${purchaseDto.productId}_plan`,
+    let productInfo;
+    if (planId) {
+      // 구독 상품인 경우 productId + planId 조합으로 조회
+      productInfo = await this.prisma.productInfo.findUnique({
+        where: {
+          productId_planId: {
+            productId: purchaseDto.productId,
+            planId: planId,
+          },
         },
-      },
-    });
+      });
+    } else {
+      // 포인트 상품인 경우 productId만으로 조회 (planId가 null인 항목)
+      productInfo = await this.prisma.productInfo.findUnique({
+        where: {
+          productId_planId: {
+            productId: purchaseDto.productId,
+            planId: null,
+          },
+        },
+      });
+    }
 
     if (!productInfo) {
-      const notFoundDetails = `productId: ${purchaseDto.productId}, planId: ${
-        planId ?? `${purchaseDto.productId}_plan`
-      }`;
+      const notFoundDetails = planId
+        ? `productId: ${purchaseDto.productId}, planId: ${planId}`
+        : `productId: ${purchaseDto.productId} (planId: null)`;
       this.logger.warn(`Product info not found for ${notFoundDetails}`);
       throw new HttpException('Product not found', HttpStatus.BAD_REQUEST);
     }
@@ -309,7 +323,7 @@ export class BillingService implements OnModuleInit {
       data: {
         userId: user.id,
         productId: purchaseDto.productId,
-        planId: productInfo.planId, // ✅ productInfo에서 planId 추가
+        productInfoId: productInfo.id, // ✅ productInfo.id를 연결
         purchaseToken: purchaseDto.purchaseToken,
         orderId: purchaseDto.orderId,
         purchaseTime: new Date(purchaseDto.purchaseTime),

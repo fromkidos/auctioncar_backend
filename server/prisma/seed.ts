@@ -456,7 +456,6 @@ async function main() {
         name: '100 포인트',
         description: '기본 포인트 팩 - 100 포인트를 추가합니다.',
         value: 100,
-        planId: 'point_100_plan',
       },
       {
         productId: 'point_500',
@@ -464,7 +463,6 @@ async function main() {
         name: '500 포인트',
         description: '인기 포인트 팩 - 500 포인트를 추가합니다.',
         value: 500,
-        planId: 'point_500_plan',
       },
       {
         productId: 'point_1000',
@@ -472,7 +470,6 @@ async function main() {
         name: '1,000 포인트',
         description: '추천 포인트 팩 - 1,000 포인트를 추가합니다.',
         value: 1000,
-        planId: 'point_1000_plan',
       },
       {
         productId: 'point_5000',
@@ -480,7 +477,6 @@ async function main() {
         name: '5,000 포인트',
         description: '프리미엄 포인트 팩 - 5,000 포인트 + 5%추가 포인트.',
         value: 5250,
-        planId: 'point_5000_plan',
       },
       {
         productId: 'point_10000',
@@ -488,7 +484,6 @@ async function main() {
         name: '10,000 포인트',
         description: '프리미엄 포인트 팩 - 10,000 포인트 + 10%추가 포인트.',
         value: 11000,
-        planId: 'point_10000_plan',
       },
       // 정기구독 상품들 - 월간 구독
       {
