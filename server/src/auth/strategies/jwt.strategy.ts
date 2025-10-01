@@ -28,6 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         email: true,
         profileImageUrl: true,
         points: true,
+        detailViewCredits: true,
         experiencePoints: true,
       },
     });

@@ -9,6 +9,7 @@ import { ScrapingModule } from './scraping/scraping.module';
 import { MockBidsModule } from './mock-bids/mock-bids.module';
 import { BillingModule } from './billing/billing.module';
 import { ProductsModule } from './products/products.module';
+import { DetailViewsModule } from './detail-views/detail-views.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ProductsModule } from './products/products.module';
     MockBidsModule,
     BillingModule,
     ProductsModule,
+    DetailViewsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

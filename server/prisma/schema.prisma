@@ -149,7 +149,8 @@ model User {
   displayName           String?
   profileImageUrl       String?
   email                 String?                 @unique
-  points                Int                     @default(50)
+  points                Int                     @default(30)
+  detailViewCredits     Int                     @default(10)
   createdAt             DateTime                @default(now())
   updatedAt             DateTime                @updatedAt
   provider              SocialLoginProvider
