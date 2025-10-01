@@ -1,6 +1,3 @@
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,7 +7,356 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// --- Enums ---
+model AuctionBaseInfo {
+  auction_no                 String                      @id
+  case_year                  Int
+  case_number                String
+  item_no                    Int
+  court_name                 String
+  appraisal_price            BigInt?
+  min_bid_price              BigInt?
+  sale_date                  DateTime?
+  status                     String?
+  car_name                   String?
+  car_model_year             Int?
+  car_reg_number             String?
+  car_mileage                Int?
+  car_fuel                   String?
+  car_transmission           String?
+  car_type                   String?
+  manufacturer               String?
+  min_bid_price_2            BigInt?
+  representative_photo_index Int                         @default(0)
+  created_at                 DateTime                    @default(now())
+  updated_at                 DateTime                    @default(now()) @updatedAt
+  analysisAccesses           AuctionAnalysisAccess[]
+  appraisalSummary           AuctionAppraisalSummary?
+  detailInfo                 AuctionDetailInfo?
+  auctionResult              AuctionResult?
+  auctionUserActivities      AuctionUserActivity[]
+  dateHistories              DateHistory[]
+  mockBids                   MockBid[]
+  photoUrls                  PhotoURL[]
+  similarSales               SimilarSale[]
+  vehicleComprehensiveReport VehicleComprehensiveReport?
+
+  @@index([court_name])
+  @@index([status])
+  @@index([car_name])
+  @@index([sale_date])
+}
+
+model AuctionDetailInfo {
+  auction_no              String          @id
+  court_name              String
+  location_address        String?
+  sale_time               String?
+  sale_location           String?
+  car_vin                 String?
+  other_details           String?
+  documents               Json?
+  kind                    String?
+  bid_method              String?
+  case_received_date      DateTime?
+  auction_start_date      DateTime?
+  distribution_due_date   DateTime?
+  claim_amount            BigInt?
+  engine_type             String?
+  approval_number         String?
+  displacement            Int?
+  department_info         String?
+  dividend_demand_details String?
+  dividend_storage_method String?
+  appraisal_summary_text  String?
+  created_at              DateTime        @default(now())
+  updated_at              DateTime        @default(now()) @updatedAt
+  baseInfo                AuctionBaseInfo @relation(fields: [auction_no], references: [auction_no], onDelete: Cascade)
+
+  @@index([court_name])
+}
+
+model DateHistory {
+  id              Int             @id @default(autoincrement())
+  auction_no      String
+  court_name      String
+  date_time       DateTime
+  type            String
+  location        String?
+  min_bid_price   BigInt?
+  result          String?
+  auctionBaseInfo AuctionBaseInfo @relation(fields: [auction_no], references: [auction_no], onDelete: Cascade)
+
+  @@unique([auction_no, date_time, type], name: "auction_date_type_unique")
+  @@index([auction_no])
+  @@index([court_name])
+}
+
+model PhotoURL {
+  id                Int             @id @default(autoincrement())
+  auction_no        String
+  court_name        String
+  photo_index       Int
+  image_path_or_url String
+  auctionBaseInfo   AuctionBaseInfo @relation(fields: [auction_no], references: [auction_no], onDelete: Cascade)
+
+  @@unique([auction_no, photo_index], name: "auction_photo_index_unique")
+  @@index([auction_no])
+}
+
+model SimilarSale {
+  id                      Int             @id @default(autoincrement())
+  auction_no              String
+  court_name              String
+  period                  String
+  sale_count              Int?
+  avg_appraisal_price     BigInt?
+  avg_sale_price          BigInt?
+  sale_to_appraisal_ratio Float?
+  avg_unsold_count        Float?
+  created_at              DateTime        @default(now())
+  updated_at              DateTime        @default(now()) @updatedAt
+  auctionBaseInfo         AuctionBaseInfo @relation(fields: [auction_no], references: [auction_no], onDelete: Cascade)
+
+  @@unique([auction_no, period], name: "auction_period_unique")
+  @@index([auction_no])
+}
+
+model AuctionResult {
+  auction_no      String          @id
+  appraisal_value BigInt?
+  min_bid_price   BigInt?
+  sale_price      BigInt?
+  bid_rate        Float?
+  car_model_year  Int?
+  car_name        String?
+  car_type        String?
+  sale_date       DateTime?
+  createdAt       DateTime        @default(now())
+  updated_at      DateTime        @default(now()) @updatedAt
+  auction_outcome String?
+  auction         AuctionBaseInfo @relation(fields: [auction_no], references: [auction_no])
+
+  @@index([sale_date])
+  @@index([car_type])
+  @@index([car_name])
+  @@index([car_model_year])
+  @@index([auction_outcome])
+}
+
+model User {
+  id                    String                  @id @default(cuid())
+  providerId            String
+  displayName           String?
+  profileImageUrl       String?
+  email                 String?                 @unique
+  points                Int                     @default(50)
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  provider              SocialLoginProvider
+  experiencePoints      Int                     @default(0)
+  analysisAccesses      AuctionAnalysisAccess[]
+  auctionUserActivities AuctionUserActivity[]
+  mockBids              MockBid[]
+  pointTransactions     PointTransaction[]
+  purchases             Purchase[]
+  subscriptions         Subscription?
+
+  @@unique([provider, providerId])
+}
+
+model PointTransaction {
+  id              String               @id @default(cuid())
+  userId          String
+  amount          Int
+  balanceAfter    Int
+  description     String?
+  relatedId       String?
+  transactionDate DateTime             @default(now())
+  type            PointTransactionType
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+}
+
+model AuctionAnalysisAccess {
+  id                 String          @id @default(cuid())
+  userId             String
+  auctionNo          String
+  accessDate         DateTime        @default(now())
+  pointTransactionId String?         @unique
+  auction            AuctionBaseInfo @relation(fields: [auctionNo], references: [auction_no], onDelete: Cascade)
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, auctionNo])
+  @@index([userId])
+  @@index([auctionNo])
+}
+
+model AuctionUserActivity {
+  id         String          @id @default(cuid())
+  userId     String
+  auctionNo  String
+  viewCount  Int             @default(0)
+  lastViewed DateTime        @default(now())
+  isFavorite Boolean         @default(false)
+  auction    AuctionBaseInfo @relation(fields: [auctionNo], references: [auction_no], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, auctionNo])
+  @@index([userId])
+  @@index([auctionNo])
+  @@index([isFavorite])
+}
+
+model AuctionAppraisalSummary {
+  auction_no                  String          @id
+  summary_year_mileage        String?
+  summary_color               String?
+  summary_fuel                String?
+  summary_inspection          String?
+  summary_options_etc         String?
+  created_at                  DateTime        @default(now())
+  updated_at                  DateTime        @updatedAt
+  summary_inspection_validity String?
+  summary_management_status   String?
+  baseInfo                    AuctionBaseInfo @relation(fields: [auction_no], references: [auction_no], onDelete: Cascade)
+}
+
+model VehicleComprehensiveReport {
+  auction_no                        String          @id
+  car_reg_number                    String
+  reportQueryDate                   String?
+  manufacturer                      String?
+  modelYear                         Int?
+  displacement                      String?
+  fuelType                          String?
+  detailModelName                   String?
+  bodyType                          String?
+  usageAndVehicleType               String?
+  firstInsuranceDate                String?
+  safetyFeaturesJson                Json?
+  summaryTotalLossCount             Int?
+  summaryTheftCount                 Int?
+  summaryFloodDamage                String?
+  summarySpecialUseHistory          String?
+  summaryMyCarDamageCount           Int?
+  summaryMyCarDamageAmount          BigInt?
+  summaryOtherCarDamageCount        Int?
+  summaryOtherCarDamageAmount       BigInt?
+  summaryOwnerChangeCount           Int?
+  summaryNumberChangeHistory        String?
+  specialUsageRentalHistory         String?
+  specialUsageBusinessUseHistory    String?
+  specialUsageGovernmentUseHistory  String?
+  ownerAndNumberChangesJson         Json?
+  specialAccidentsTotalLossDate     String?
+  specialAccidentsTheftDate         String?
+  specialAccidentsFloodDamageDate   String?
+  insuranceAccidentsUninsuredPeriod String?
+  insuranceAccidentsDetailsJson     Json?
+  mileageHistoryJson                Json?
+  recallInfoJson                    Json?
+  crawledAt                         DateTime        @default(now())
+  sourceHtmlPath                    String?
+  vehicleValueRangeMin              Int?
+  vehicleValueRangeMax              Int?
+  vehiclePredictedPriceJson         Json?
+  updatedAt                         DateTime        @updatedAt
+  auctionBaseInfo                   AuctionBaseInfo @relation(fields: [auction_no], references: [auction_no], onDelete: Cascade)
+}
+
+model CourtInfo {
+  court_name String  @id
+  address    String?
+  region     String?
+  latitude   Float?
+  longitude  Float?
+}
+
+model MockBid {
+  id                     String          @id @default(cuid())
+  userId                 String
+  auctionNo              String
+  bidAmount              BigInt
+  bidTime                DateTime        @default(now())
+  isProcessed            Boolean         @default(false)
+  rank                   Int?
+  earnedExperiencePoints Int?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  auction_sale_date      DateTime
+  auction                AuctionBaseInfo @relation(fields: [auctionNo], references: [auction_no], onDelete: Cascade)
+  user                   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, auctionNo, auction_sale_date], name: "user_auction_sale_date_unique")
+  @@index([userId])
+  @@index([auctionNo])
+  @@index([auction_sale_date])
+  @@index([bidTime])
+  @@index([isProcessed])
+}
+
+model Purchase {
+  id            String    @id @default(cuid())
+  userId        String
+  productId     String
+  purchaseToken String    @unique
+  purchaseTime  DateTime
+  orderId       String    @unique
+  signature     String
+  originalJson  Json
+  isConsumed    Boolean   @default(false)
+  consumedTime  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([productId])
+}
+
+model Subscription {
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  productId              String
+  originalPurchaseToken  String   @unique
+  latestPurchaseToken    String
+  startTime              DateTime
+  expiryTime             DateTime
+  status                 String
+  autoRenewing           Boolean  @default(true)
+  latestNotificationType String?
+  latestNotificationJson Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([productId])
+  @@index([expiryTime])
+  @@index([status])
+}
+
+model ProductInfo {
+  id          String      @id
+  productId   String
+  type        ProductType
+  value       Int
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime
+  description String?
+  name        String
+  features    Json?
+  planId      String?
+  planTier    String?
+
+  @@unique([productId, planId])
+  @@index([planTier])
+  @@index([productId])
+  @@index([type])
+}
+
 enum SocialLoginProvider {
   GOOGLE
   KAKAO
@@ -29,460 +375,4 @@ enum PointTransactionType {
 enum ProductType {
   POINT
   SUBSCRIPTION
-}
-
-// --- 메인 테이블: 경매 기본 정보 ---
-model AuctionBaseInfo {
-  auction_no       String    @id // 기본 키 (예: 2024타경101828-1)
-  case_year        Int       // 사건년도
-  case_number      String    // 사건번호
-  item_no          Int       // 물건번호
-  court_name       String    // 관할법원
-  appraisal_price  BigInt?   // 감정평가액
-  min_bid_price    BigInt?   // 최저매각가격
-  min_bid_price_2  BigInt?   // 두 번째 최저매각가격
-  sale_date        DateTime? // 매각기일 (시간 정보 포함될 수 있음)
-  status           String?   // 진행상태 (예: 유찰 4회, 정지, 연기)
-  car_name         String?   // 차명
-  car_model_year   Int?      // 차량연식
-  car_reg_number   String?   // 차량등록번호
-  car_mileage      Int?      // 주행거리 (km)
-  car_fuel         String?   // 사용연료
-  car_transmission String?   // 변속기 종류
-  car_type         String?   // 차종
-  manufacturer     String?   // 제조사
-  representative_photo_index Int @default(0)
-
-  // 관계 정의
-  detailInfo    AuctionDetailInfo?
-  dateHistories DateHistory[]
-  photoUrls     PhotoURL[]
-  similarSales  SimilarSale[]
-  analysisAccesses AuctionAnalysisAccess[]
-  auctionUserActivities AuctionUserActivity[]
-  appraisalSummary AuctionAppraisalSummary?
-  vehicleComprehensiveReport VehicleComprehensiveReport?
-  mockBids MockBid[]
-  auctionResult AuctionResult?
-
-  // 인덱스
-  @@index([court_name])
-  @@index([status])
-  @@index([car_name])
-  @@index([sale_date])
-
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
-}
-
-// --- 경매 세부 정보 (AuctionBaseInfo와 1:1 관계) ---
-model AuctionDetailInfo {
-  auction_no              String    @id // AuctionBaseInfo의 auction_no를 그대로 사용 (PK이자 FK)
-  court_name              String    // 관할법원 (중복될 수 있으나 CSV 구조 반영)
-  location_address        String?   // 보관장소 (소재지)
-  sale_time               String?   // 매각시간 (예: "10:00")
-  sale_location           String?   // 매각장소
-  car_vin                 String?   // 차대번호
-  other_details           String?   @db.Text // 기타 특이사항
-  documents               Json?     // 관련서류 (예: "[]" -> JSON 배열로 저장)
-  kind                    String?   // 물건종류 (예: "자동차,중기")
-  bid_method              String?   // 입찰방법
-  case_received_date      DateTime? // 사건접수일
-  auction_start_date      DateTime? // 경매개시결정일
-  distribution_due_date   DateTime? // 배당요구종기일
-  claim_amount            BigInt? // 채권액 합계 (Int? -> BigInt?)
-  engine_type             String?   // 원동기형식
-  approval_number         String?   // 형식승인번호
-  displacement            Int?      // 배기량 (cc)
-  department_info         String?   @db.Text // 담당계 정보
-  dividend_demand_details String?   @db.Text // 배당요구종기내역
-  dividend_storage_method String?   // 배당보관방법
-  appraisal_summary_text  String?   @db.Text // 감정평가요약 (길이 매우 길 수 있음)
-
-  // 관계 정의 (AuctionBaseInfo 참조)
-  baseInfo AuctionBaseInfo @relation(fields: [auction_no], references: [auction_no], onDelete: Cascade)
-
-  @@index([court_name])
-
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
-}
-
-// --- 기일 내역 (AuctionBaseInfo와 1:N 관계) ---
-model DateHistory {
-  id             Int      @id @default(autoincrement()) // 자동 증가하는 PK
-  auction_no     String   // FK (AuctionBaseInfo 참조)
-  court_name     String   // 관할법원
-  date_time      DateTime // 기일 (날짜와 시간)
-  type           String   // 기일종류
-  location       String?  // 기일장소
-  min_bid_price  BigInt? // 최저매각가격 (Int? -> BigInt?)
-  result         String?  // 기일결과
-
-  // 관계 정의 (AuctionBaseInfo 참조)
-  auctionBaseInfo AuctionBaseInfo @relation(fields: [auction_no], references: [auction_no], onDelete: Cascade)
-
-  // 인덱스 및 유니크 제약
-  @@index([auction_no])
-  @@index([court_name])
-  @@unique([auction_no, date_time, type], name: "auction_date_type_unique") // 복합 유니크 키
-}
-
-// --- 사진 URL 정보 (AuctionBaseInfo와 1:N 관계) ---
-model PhotoURL {
-  id                Int    @id @default(autoincrement()) // 자동 증가하는 PK
-  auction_no        String // FK (AuctionBaseInfo 참조)
-  court_name        String // 관할법원
-  photo_index       Int    // 사진 순서
-  image_path_or_url String // 이미지 경로 또는 URL
-
-  // 관계 정의 (AuctionBaseInfo 참조)
-  auctionBaseInfo AuctionBaseInfo @relation(fields: [auction_no], references: [auction_no], onDelete: Cascade)
-
-  // 인덱스 및 유니크 제약
-  @@index([auction_no])
-  @@unique([auction_no, photo_index], name: "auction_photo_index_unique") // 복합 유니크 키
-}
-
-// --- 유사 매각 정보 (AuctionBaseInfo와 1:N 관계) ---
-model SimilarSale {
-  id                      Int     @id @default(autoincrement()) // 자동 증가하는 PK
-  auction_no              String  // FK (AuctionBaseInfo 참조)
-  court_name              String  // 관할법원
-  period                  String  // 기간 (예: "3개월", "6개월")
-  sale_count              Int?    // 매각건수 (예: "41건" -> 41)
-  avg_appraisal_price     BigInt?// 평균감정가 (Int? -> BigInt?)
-  avg_sale_price          BigInt?// 평균매각가 (Int? -> BigInt?)
-  sale_to_appraisal_ratio Float?  // 매각가율 (예: "69%" -> 0.69)
-  avg_unsold_count        Float?  // 평균유찰횟수 (예: "1.7회" -> 1.7)
-
-  // 관계 정의 (AuctionBaseInfo 참조)
-  auctionBaseInfo AuctionBaseInfo @relation(fields: [auction_no], references: [auction_no], onDelete: Cascade)
-
-  // 인덱스 및 유니크 제약
-  @@index([auction_no])
-  @@unique([auction_no, period], name: "auction_period_unique") // 복합 유니크 키
-
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
-}
-
-// --- 크롤링 결과 저장 테이블 ---
-model AuctionResult {
-  auction_no        String    @id // 기본 키 (예: "2024타경128478-1")
-  car_name          String?   // 차량 이름 (예: "E220 CDI")
-  car_model_year    Int?      // 차량 연식 (예: 2014)
-  car_type          String?   // 차량 종류 (예: "승용차", "화물차")
-  appraisal_value   BigInt?   // 감정평가액
-  min_bid_price     BigInt?   // 최저매각가격
-  sale_date         DateTime? // 매각기일 (DateTime으로 변경)
-  sale_price        BigInt?   // 매각대금 (실제 낙찰가)
-  bid_rate          Float?    // 낙찰율 ( (sale_price / appraisal_value) * 100 )
-  auction_outcome   String?   // 매각 결과 (예: "매각", "유찰")
-
-  createdAt         DateTime  @default(now())
-  updated_at        DateTime  @default(now()) @updatedAt
-
-  // 인덱스 (필요시 추가)
-  @@index([sale_date])
-  @@index([car_type])
-  @@index([car_name])
-  @@index([car_model_year])
-  @@index([auction_outcome])
-
-  auction AuctionBaseInfo @relation(fields: [auction_no], references: [auction_no])
-}
-
-// --- 사용자 정보 (소셜 로그인 기반) ---
-model User {
-  id                String    @id @default(cuid()) // 우리 시스템의 고유 사용자 ID
-  provider          SocialLoginProvider // Enum으로 변경
-  providerId        String    // 해당 소셜 공급자에서 발급된 사용자의 고유 ID
-
-  displayName       String?   // 소셜 프로필에 설정된 이름 (닉네임)
-  profileImageUrl   String?   // 소셜 프로필 사진 URL
-  email             String?   @unique // 이메일 (알림 등 필요시)
-  points            Int       @default(50) // 사용자 보유 포인트
-  experiencePoints  Int       @default(0) // 사용자 경험치
-
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-
-  // 관계 정의
-  pointTransactions PointTransaction[]      // 사용자의 포인트 거래 내역
-  analysisAccesses  AuctionAnalysisAccess[] // 사용자가 접근 권한을 가진 경매 분석 목록
-  auctionUserActivities AuctionUserActivity[] // 사용자의 경매 활동 내역
-  mockBids          MockBid[]             // 사용자의 모의 입찰 내역
-  purchases         Purchase[]            // 사용자의 소모품 구매 내역
-  subscriptions     Subscription[]        // 사용자의 구독 내역
-
-  @@unique([provider, providerId]) // 특정 소셜 공급자의 특정 계정은 우리 시스템에서 하나의 사용자로 매핑
-}
-
-// --- 포인트 거래 내역 ---
-model PointTransaction {
-  id              String    @id @default(cuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  type            PointTransactionType // Enum으로 변경
-  amount          Int       // 거래된 포인트 양
-  balanceAfter    Int       // 이 거래 후 사용자의 최종 잔액
-  description     String?   // 거래 설명
-  relatedId       String?   // 관련 ID (예: AuctionAnalysisAccess ID, 결제 ID 등)
-  transactionDate DateTime  @default(now())
-
-  @@index([userId])
-  @@index([type])
-}
-
-// --- 경매 분석 접근 권한 ---
-model AuctionAnalysisAccess {
-  id                  String    @id @default(cuid())
-  userId              String
-  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  auctionNo           String
-  auction             AuctionBaseInfo @relation(fields: [auctionNo], references: [auction_no], onDelete: Cascade)
-
-  accessDate          DateTime  @default(now())
-  pointTransactionId  String?   @unique // 이 접근을 위해 발생한 PointTransaction ID (선택 사항)
-
-  @@unique([userId, auctionNo])
-  @@index([userId])
-  @@index([auctionNo])
-}
-
-model AuctionUserActivity {
-  id         String   @id @default(cuid())
-  userId     String
-  auctionNo  String
-  viewCount  Int      @default(0)      // 사용자의 해당 경매 조회수 누적
-  lastViewed DateTime @default(now())  // 마지막 조회 시각
-  isFavorite Boolean  @default(false)  // 즐겨찾기 여부
-
-  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  auction    AuctionBaseInfo @relation(fields: [auctionNo], references: [auction_no], onDelete: Cascade)
-
-  @@unique([userId, auctionNo]) // 한 사용자가 한 경매에 대해 한 row만 존재
-  @@index([userId])
-  @@index([auctionNo])
-  @@index([isFavorite])
-}
-
-// --- 감정평가 요약 정보 (AuctionBaseInfo의 특정 아이템별) ---
-model AuctionAppraisalSummary {
-  auction_no               String  @id // PK이자 FK (AuctionBaseInfo의 auction_no 값 참조)
-
-  summary_year_mileage     String? @db.Text
-  summary_color            String? @db.Text
-  summary_management_status   String? @db.Text
-  summary_fuel             String? @db.Text
-  summary_inspection       String? @db.Text
-  summary_inspection_validity String? @db.Text
-  summary_options_etc      String? @db.Text
-
-  baseInfo                 AuctionBaseInfo @relation(fields: [auction_no], references: [auction_no], onDelete: Cascade)
-
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-}
-
-// --- 차량 종합 정보 보고서 (카히스토리 등 외부 분석 정보) ---
-model VehicleComprehensiveReport {
-  auction_no String @id // PK & FK to AuctionBaseInfo.auction_no
-
-  car_reg_number String
-
-  // --- 보고서 기본 정보 ---
-  reportQueryDate      String?   
-  manufacturer         String?   
-  modelYear            Int?      
-  displacement         String?   
-  fuelType             String?   
-  detailModelName      String?   
-  bodyType             String?   
-  usageAndVehicleType  String?   
-  firstInsuranceDate   String?   
-
-  // --- 첨단 안전 장치 ---
-  // 각 안전장치명을 key로, 장착여부(O, △, -, ☓ 등)를 value로 하는 JSON 객체
-  safetyFeaturesJson   Json?     // 예: {"제동잠금방지장치": "O", "자동비상제동장치": "-", ...}
-
-  // --- 사고이력 요약 ---
-  summaryTotalLossCount      Int?    // 전손 보험사고 횟수
-  summaryTheftCount          Int?    // 도난 보험사고 횟수
-  summaryFloodDamage         String? // 침수 보험사고 (예: "없음", "있음", "1회")
-  summarySpecialUseHistory   String? // 특수 용도 이력 (예: "있음", "없음")
-  summaryMyCarDamageCount    Int?    // 내차 피해 횟수
-  summaryMyCarDamageAmount   BigInt? // 내차 피해 총액 (원 단위)
-  summaryOtherCarDamageCount Int?    // 상대차 피해 횟수
-  summaryOtherCarDamageAmount BigInt? // 상대차 피해 총액 (원 단위)
-  summaryOwnerChangeCount    Int?    // 소유자 변경 횟수
-  summaryNumberChangeHistory String? // 차량번호 변경 이력 (예: "있음", "없음")
-
-  // --- 자동차 특수 용도 이력 ---
-  specialUsageRentalHistory     String? // 대여용도 사용이력(렌터카) (예: "있음", "없음")
-  specialUsageBusinessUseHistory String? // 영업용도 사용이력 (예: "있음", "없음")
-  specialUsageGovernmentUseHistory String? // 관용용도 사용이력 (예: "있음", "없음")
-
-  // --- 자동차 번호 / 소유자 변경이력 (JSON 배열) ---
-  // [{ "changeDate": "YYYY-MM-DD", "ownerChanged": "변경", "vehicleNumber": "12가XXXX", "vehicleUse": "자가용 승용" }, ...]
-  ownerAndNumberChangesJson Json?
-
-  // --- 자동차 특수 사고 이력 ---
-  specialAccidentsTotalLossDate  String? // 전손 보험사고 발생일자 (예: "2015-04-20") 또는 "없음"
-  specialAccidentsTheftDate      String? // 도난 보험사고 발생일자 (예: "2010-08-20") 또는 "없음"
-  specialAccidentsFloodDamageDate String? // 침수 보험사고(분손) 발생일자 또는 "없음"
-
-  // --- 보험사고이력 상세 정보 ---
-  insuranceAccidentsUninsuredPeriod String? // 자기차량손해담보 미가입 기간 (예: "2009년 03월 ~ 2010년 03월")
-  // [{ "type": "내차보험"/"상대보험", "accidentDate": "YYYY-MM-DD", "status": "지급완료", "insurer": "XX보험",
-  //    "repairCost": {"parts":100, "labor":50, "paint":30, "total":180}, "insurancePayment": null, "damagedParts": ["앞범퍼"] }, ...]
-  insuranceAccidentsDetailsJson Json?
-
-  // --- 주행거리 정보 (JSON 배열) ---
-  // [{ "inspectionDate": "YYYY-MM-DD", "mileage": 12345, "inspectionType": "정기검사" }, ...]
-  mileageHistoryJson Json?
-
-  // --- 기타 정보 (카히스토리 제공) ---
-  // freeFloodCheckResult String? // 무료침수사고조회 결과 (삭제)
-  // freeScrapCheckResult String? // 무료폐차사고조회 결과 (삭제)
-  // [{ "recallDate": "YYYY-MM-DD", "reason": "...", ... }]
-  recallInfoJson       Json?   // 리콜 정보
-
-  // --- 크롤링 관련 메타 정보 ---
-  crawledAt            DateTime @default(now()) // 이 보고서 정보가 크롤링된 시점
-  sourceHtmlPath       String?  @db.Text // 크롤링한 원본 HTML 파일 경로 (필요시)
-
-  // --- 차량가액 범위(최소/최대) ---
-  vehicleValueRangeMin Int?
-  vehicleValueRangeMax Int?
-
-  // --- 차량예측시세 정보 ---
-  vehiclePredictedPriceJson   Json?
-
-  // --- 관계 정의 ---
-  auctionBaseInfo      AuctionBaseInfo @relation(fields: [auction_no], references: [auction_no], onDelete: Cascade)
-
-  updatedAt            DateTime @updatedAt
-}
-
-model CourtInfo {
-  court_name String  @id // PK, 관할법원 이름 (예: "서울중앙지방법원")
-  address    String? // 주소
-  region     String? // 지역 (예: "서울", "경기", "인천" 등)
-  latitude   Float?  // 위도
-  longitude  Float?  // 경도
-}
-
-// --- 모의 입찰 정보 --- 
-model MockBid {
-  id              String    @id @default(cuid())
-  userId          String    // 사용자 ID (FK)
-  auctionNo       String    // 경매 번호 (FK)
-  auction_sale_date DateTime // 해당 모의 입찰이 진행된 경매의 매각기일 (AuctionBaseInfo.sale_date 값 참조)
-  bidAmount       BigInt    // 모의 입찰 금액
-  bidTime         DateTime  @default(now()) // 모의 입찰 시간
-  isProcessed     Boolean   @default(false) // 순위 및 경험치 처리 여부
-  rank            Int?      // 최종 순위
-  earnedExperiencePoints Int? // 획득 경험치
-
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  auction         AuctionBaseInfo @relation(fields: [auctionNo], references: [auction_no], onDelete: Cascade)
-
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@unique([userId, auctionNo, auction_sale_date], name: "user_auction_sale_date_unique")
-  @@index([userId])
-  @@index([auctionNo])
-  @@index([auction_sale_date]) // auction_sale_date 필드에 대한 인덱스
-  @@index([bidTime])
-  @@index([isProcessed])
-}
-
-// --- 인앱 결제 및 구독 관련 모델 ---
-
-// 상품 정보 (포인트 상품 등)
-model ProductInfo {
-  id          String      @id @default(cuid())
-  productId   String      // Google Play 상품 ID (예: 'point_100', 'subscription_monthly')
-  type        ProductType // 상품 유형
-  name        String      // 상품명 (예: "100 포인트", "베이직 월간")
-  description String?     // 상품 설명
-  value       Int         // 포인트 값 또는 가격 (원 단위)
-  
-  // 구독 상품 전용 필드
-  planId      String?     // Google Play 요금제 ID (예: "monthly-plan", "monthly-plan-plus")
-  planTier    String?     // 요금제 등급 (예: "BASIC", "PREMIUM")
-  features    Json?       // 요금제 기능 목록 (JSON 배열)
-  
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  purchases   Purchase[]
-  
-  @@unique([productId, planId]) // productId + planId 조합이 unique
-  @@index([productId])
-  @@index([type])
-  @@index([planTier])
-  @@map("product_infos")
-}
-
-// 소모품 구매 내역 (예: 포인트 구매)
-model Purchase {
-  id                   String    @id @default(cuid())
-  userId               String
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  productId            String    // 예: 'point_100'
-  
-  // ProductInfo와 직접적인 relation 대신, productId를 통해 service layer에서 조회
-  productInfoId        String?
-  product              ProductInfo? @relation(fields: [productInfoId], references: [id])
-
-  purchaseToken        String    @unique // Google Play에서 제공하는 고유 토큰
-  purchaseTime         DateTime
-  orderId              String    @unique // Google Play 주문 ID
-  signature            String    // 구매 서명
-  originalJson         Json      // Google Play에서 받은 원본 JSON 데이터
-  
-  isConsumed           Boolean   @default(false) // 서버에서 상품 지급 후 소모 처리 여부
-  consumedTime         DateTime?
-  
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-
-  @@index([userId])
-  @@index([productId])
-}
-
-// 구독 내역
-model Subscription {
-  id                   String    @id @default(cuid())
-  userId               String    @unique // 한 사용자는 하나의 구독만 가짐
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  productId            String    // 예: 'subscription_monthly'
-  originalPurchaseToken String   @unique // 최초 구매 토큰 (갱신 시에도 이 값을 추적)
-  latestPurchaseToken  String    // 가장 최근 갱신된 구매 토큰
-  
-  startTime            DateTime
-  expiryTime           DateTime
-  
-  status               String    // 예: 'ACTIVE', 'PAUSED', 'EXPIRED', 'CANCELED'
-  autoRenewing         Boolean   @default(true)
-  
-  // Google Play RTDN (실시간 개발자 알림) 관련 필드
-  latestNotificationType String?   // 예: 'SUBSCRIPTION_RENEWED', 'SUBSCRIPTION_CANCELED'
-  latestNotificationJson Json?     // 가장 최근에 받은 알림의 전체 JSON 데이터
-
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-
-  @@index([userId])
-  @@index([productId])
-  @@index([expiryTime])
-  @@index([status])
 }

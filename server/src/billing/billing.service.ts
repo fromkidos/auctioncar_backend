@@ -248,13 +248,11 @@ export class BillingService implements OnModuleInit {
         },
       });
     } else {
-      // 포인트 상품인 경우 productId만으로 조회 (planId가 null인 항목)
-      productInfo = await this.prisma.productInfo.findUnique({
+      // 포인트 상품인 경우 productId로 조회하되 planId가 null인 항목 찾기
+      productInfo = await this.prisma.productInfo.findFirst({
         where: {
-          productId_planId: {
-            productId: purchaseDto.productId,
-            planId: null,
-          },
+          productId: purchaseDto.productId,
+          planId: null,
         },
       });
     }
@@ -323,7 +321,6 @@ export class BillingService implements OnModuleInit {
       data: {
         userId: user.id,
         productId: purchaseDto.productId,
-        productInfoId: productInfo.id, // ✅ productInfo.id를 연결
         purchaseToken: purchaseDto.purchaseToken,
         orderId: purchaseDto.orderId,
         purchaseTime: new Date(purchaseDto.purchaseTime),

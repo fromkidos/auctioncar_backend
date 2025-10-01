@@ -448,79 +448,104 @@ async function main() {
   });
 
   // ProductInfo 테이블 초기화 (포인트 상품)
-  await prisma.productInfo.createMany({
-    data: [
-      {
-        productId: 'point_100',
-        type: 'POINT',
-        name: '100 포인트',
-        description: '기본 포인트 팩 - 100 포인트를 추가합니다.',
-        value: 100,
-      },
-      {
-        productId: 'point_500',
-        type: 'POINT',
-        name: '500 포인트',
-        description: '인기 포인트 팩 - 500 포인트를 추가합니다.',
-        value: 500,
-      },
-      {
-        productId: 'point_1000',
-        type: 'POINT',
-        name: '1,000 포인트',
-        description: '추천 포인트 팩 - 1,000 포인트를 추가합니다.',
-        value: 1000,
-      },
-      {
-        productId: 'point_5000',
-        type: 'POINT',
-        name: '5,000 포인트',
-        description: '프리미엄 포인트 팩 - 5,000 포인트 + 5%추가 포인트.',
-        value: 5250,
-      },
-      {
-        productId: 'point_10000',
-        type: 'POINT',
-        name: '10,000 포인트',
-        description: '프리미엄 포인트 팩 - 10,000 포인트 + 10%추가 포인트.',
-        value: 11000,
-      },
-      // 정기구독 상품들 - 월간 구독
-      {
-        productId: 'subscription_monthly',
-        type: 'SUBSCRIPTION',
-        name: '베이직 월간',
-        description: '광고 없이 경매 상세 정보 무제한 조회 + 경매 상세 정보 하단 광고 제거',
-        value: 2900,
-        planId: 'basic-monthly',
-        planTier: 'BASIC',
-        features: ['광고 제거'],
-      },
-      {
-        productId: 'subscription_monthly',
-        type: 'SUBSCRIPTION',
-        name: '플러스 월간',
-        description: '베이직 혜택 + 유사 모델의 최근 낙찰 정보 제공',
-        value: 3900,
-        planId: 'plus-monthly',
-        planTier: 'PLUS',
-        features: ['광고 제거', '모델 별 최근 낙찰 정보 제공'],
-      },
-      {
-        productId: 'subscription_monthly',
-        type: 'SUBSCRIPTION',
-        name: '프리미엄 월간',
-        description: '플러스 혜택 + 홈 화면의 제휴 광고 제거',
-        value: 4900,
-        planId: 'premium-monthly',
-        planTier: 'PREMIUM',
-        features: ['광고 제거', '모델 별 최근 낙찰 정보 제공'],
-      },
-      // 정기구독 상품들 - 연간 구독
+  const productInfoData = [
+    {
+      productId: 'point_100',
+      type: 'POINT' as const,
+      name: '100 포인트',
+      description: '기본 포인트 팩 - 100 포인트를 추가합니다.',
+      value: 100,
+      planId: null,
+    },
+    {
+      productId: 'point_500',
+      type: 'POINT' as const,
+      name: '500 포인트',
+      description: '인기 포인트 팩 - 500 포인트를 추가합니다.',
+      value: 500,
+      planId: null,
+    },
+    {
+      productId: 'point_1000',
+      type: 'POINT' as const,
+      name: '1,000 포인트',
+      description: '추천 포인트 팩 - 1,000 포인트를 추가합니다.',
+      value: 1000,
+      planId: null,
+    },
+    {
+      productId: 'point_5000',
+      type: 'POINT' as const,
+      name: '5,000 포인트',
+      description: '프리미엄 포인트 팩 - 5,000 포인트 + 5%추가 포인트.',
+      value: 5250,
+      planId: null,
+    },
+    {
+      productId: 'point_10000',
+      type: 'POINT' as const,
+      name: '10,000 포인트',
+      description: '프리미엄 포인트 팩 - 10,000 포인트 + 10%추가 포인트.',
+      value: 11000,
+      planId: null,
+    },
+    // 정기구독 상품들 - 월간 구독
+    {
+      productId: 'subscription_monthly',
+      type: 'SUBSCRIPTION' as const,
+      name: '베이직 월간',
+      description: '광고 없이 경매 상세 정보 무제한 조회 + 경매 상세 정보 하단 광고 제거',
+      value: 2900,
+      planId: 'basic-monthly',
+      planTier: 'BASIC',
+      features: ['광고 제거'],
+    },
+    {
+      productId: 'subscription_monthly',
+      type: 'SUBSCRIPTION' as const,
+      name: '플러스 월간',
+      description: '베이직 혜택 + 유사 모델의 최근 낙찰 정보 제공',
+      value: 3900,
+      planId: 'plus-monthly',
+      planTier: 'PLUS',
+      features: ['광고 제거', '모델 별 최근 낙찰 정보 제공'],
+    },
+    {
+      productId: 'subscription_monthly',
+      type: 'SUBSCRIPTION' as const,
+      name: '프리미엄 월간',
+      description: '플러스 혜택 + 홈 화면의 제휴 광고 제거',
+      value: 4900,
+      planId: 'premium-monthly',
+      planTier: 'PREMIUM',
+      features: ['광고 제거', '모델 별 최근 낙찰 정보 제공'],
+    },
+  ];
 
-    ],
-    skipDuplicates: true, // 중복 방지
-  });
+  // 각 상품을 개별적으로 생성 (존재 여부 확인 후 생성)
+  for (const product of productInfoData) {
+    const existing = await prisma.productInfo.findFirst({
+      where: {
+        productId: product.productId,
+        planId: product.planId,
+      },
+    });
+
+    if (!existing) {
+      await prisma.productInfo.create({
+        data: {
+          productId: product.productId,
+          type: product.type,
+          name: product.name,
+          description: product.description,
+          value: product.value,
+          planId: product.planId,
+          planTier: product.planTier,
+          features: product.features,
+        } as any, // 타입 단언으로 우회
+      });
+    }
+  }
 
   console.log('✅ ProductInfo seeded: point and subscription products created');
 
