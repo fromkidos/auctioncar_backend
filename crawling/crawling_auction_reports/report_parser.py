@@ -61,30 +61,45 @@ class ReportParser:
         """감정평가 필드 추출"""
         return self.appraisal_extractor.extract_appraisal_fields()
     
-    def extract_photos(self) -> list:
-        """사진 추출"""
-        return self.photo_extractor.extract_photos()
+    def extract_photos(self) -> int:
+        """사진 추출 및 개수 반환"""
+        photos = self.photo_extractor.extract_photos()
+        return len(photos)
     
     def run(self) -> ReportExtractionResult:
         """전체 추출 프로세스 실행"""
         pdf_filename = os.path.basename(self.pdf_path)
         
+        # 스캔본 PDF인 경우 스킵
+        if not self.is_text_based:
+            print(f"[리포트 추출] 스캔본 PDF이므로 스킵: {pdf_filename}")
+            return ReportExtractionResult(
+                pdf_filename=pdf_filename,
+                location_address=None,
+                appraisal=AppraisalFields()
+            )
+        
+        # 텍스트 기반 PDF인 경우에만 추출 실행
+        print(f"[리포트 추출] 텍스트 기반 PDF 처리: {pdf_filename}")
+        
         # 각종 추출 실행
         location_address = self.extract_location_address()
         appraisal = self.extract_appraisal_fields()
-        photos = self.extract_photos()
+        photo_count = self.extract_photos()  # 사진 개수만 추출
         
         # 결과 생성
         result = ReportExtractionResult(
             pdf_filename=pdf_filename,
             location_address=location_address,
-            appraisal=appraisal,
-            photos_saved=photos
+            appraisal=appraisal
         )
+        
+        # metadata에 사진 개수 저장
+        self.save_result(result, photo_count)
         
         return result
     
-    def save_result(self, result: ReportExtractionResult) -> str:
+    def save_result(self, result: ReportExtractionResult, photo_count: int = 0) -> str:
         """결과를 JSON 파일로 저장"""
         # 출력 디렉토리 생성
         ensure_dir(self.output_root)
@@ -108,7 +123,11 @@ class ReportParser:
                 'inspection_location': result.appraisal.inspection_location,
                 'ship_etc': result.appraisal.ship_etc,
             },
-            'photos_saved': result.photos_saved
+            'metadata': {
+                'total_photo_count': photo_count,
+                'is_text_based': self.is_text_based,
+                'total_pages': len(self.doc) if hasattr(self, 'doc') else 0
+            }
         }
         
         # JSON 파일로 저장
@@ -128,8 +147,7 @@ def parse_pdf_to_output(pdf_path: str, output_root: Optional[str] = None) -> Rep
     """PDF를 파싱하여 결과를 반환하는 편의 함수"""
     parser = ReportParser(pdf_path, output_root)
     try:
-        result = parser.run()
-        parser.save_result(result)
+        result = parser.run()  # run() 메서드에서 이미 save_result() 호출됨
         return result
     finally:
         parser.close()

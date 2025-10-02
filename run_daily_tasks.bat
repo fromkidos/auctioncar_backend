@@ -2,7 +2,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 REM ================================================================================
-REM Daily Auction Crawling Script - simplified version (no health check)
+REM Daily Auction Crawling Script - includes report extraction
 REM ================================================================================
 
 REM 0) 고정 경로 및 공통 환경
@@ -58,6 +58,7 @@ REM 2) 파이썬 모듈 실행
 set RC=0
 call :RUNPY "crawling.crawling_auction_ongoing.update_ongoing_auctions" "update_ongoing_auctions.py"
 call :RUNPY "crawling.crawling_auction_result.court_auction_car_crawler" "court_auction_car_crawler.py"
+call :RUNPY "crawling.process_reports_to_db" "process_reports_to_db.py"
 call :RUNPY "crawling.cleanup_old_auctions" "cleanup_old_auctions.py"
 
 goto :END

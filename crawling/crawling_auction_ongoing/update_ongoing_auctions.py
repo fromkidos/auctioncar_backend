@@ -213,10 +213,44 @@ def _collect_photos(detail_page: AuctionDetailPage, full_auction_no: str, case_n
     logger.debug(f"[{full_auction_no}-{item_no}] _collect_photos 완료. 처리된 사진 개수: {len(processed_photo_info_list)}")
     return processed_photo_info_list
 
+def _is_scanned_pdf(pdf_path):
+    """PDF가 스캔본인지 감지"""
+    try:
+        import fitz
+        doc = fitz.open(pdf_path)
+        
+        # 첫 3페이지에서 텍스트 추출 시도
+        text_count = 0
+        for page_num in range(min(3, len(doc))):
+            page = doc.load_page(page_num)
+            text = page.get_text("text").strip()
+            if len(text) > 100:  # 충분한 텍스트가 있으면 텍스트 기반
+                text_count += 1
+        
+        doc.close()
+        
+        # 2페이지 이상에서 텍스트가 있으면 텍스트 기반, 아니면 스캔본
+        is_text_based = text_count >= 2
+        is_scanned = not is_text_based
+        
+        logger.info(f"PDF 스캔본 여부 감지: {'스캔본' if is_scanned else '텍스트 기반'}")
+        return is_scanned
+        
+    except Exception as e:
+        logger.error(f"PDF 스캔본 여부 감지 실패: {e}")
+        return True  # 오류 시 스캔본으로 간주하여 안전하게 처리
+
 def _download_pdf(detail_page, auction_no):
     if not detail_page.click_appraisal_report_button():
-        return None
+        return None, False  # (path, is_scanned) 튜플 반환
+    
     path = detail_page.download_appraisal_pdf_from_popup(auction_no)
+    is_scanned = False
+    
+    if path:
+        # PDF 다운로드 성공 시 스캔본 여부 감지
+        is_scanned = _is_scanned_pdf(path)
+        logger.info(f"[{auction_no}] PDF 다운로드 완료: {path} (스캔본: {is_scanned})")
     
     # iframe 컨텍스트에서 기본 컨텐츠로 전환
     if not detail_page.switch_to_default_content_from_appraisal_iframe():
@@ -231,7 +265,7 @@ def _download_pdf(detail_page, auction_no):
         # 여기서 추가적인 복구 로직 고려 가능 (예: ESC 키 전송, 페이지 새로고침 등)
         # 하지만 현재는 경고만 남기고 진행
     
-    return path
+    return path, is_scanned
 
 
 PAGE_LOAD_CONFIRM_TIMEOUT = config.DEFAULT_WAIT_TIME # 페이지 이동 후 그리드 확인 대기 시간 (기본값 사용)
@@ -289,24 +323,24 @@ def process_single_auction_item(driver, wait, auction_list_page: AuctionListPage
         if not detail_html:
             raise Exception(f"[{target}] 상세 페이지 HTML 가져오기 실패")
 
-        # --- 사진 존재 여부 및 기존 대표 사진 인덱스 확인 (단 한번, 사진 수집 전) ---
+        # --- 사진 존재 여부 및 기존 사진 개수 확인 (단 한번, 사진 수집 전) ---
         photos_already_exist_in_db = False
-        new_representative_photo_index = None 
-        existing_base_info_for_rep_photo_idx = None
+        new_total_photo_count = 0 
+        existing_base_info_for_photo_count = None
 
         with get_db_connection() as temp_db_conn_for_photo_check:
             if not temp_db_conn_for_photo_check:
                 logger.warning(f"[{target}] 사진 존재 여부 확인을 위한 DB 연결 실패. 사진 수집을 기본으로 진행합니다.")
             else:
-                existing_base_info_for_rep_photo_idx = get_auction_base_by_auction_no(temp_db_conn_for_photo_check, target)
-                if existing_base_info_for_rep_photo_idx:
+                existing_base_info_for_photo_count = get_auction_base_by_auction_no(temp_db_conn_for_photo_check, target)
+                if existing_base_info_for_photo_count:
                     try:
                         photos_already_exist_in_db = db_manager.check_photos_exist(temp_db_conn_for_photo_check, target)
                         logger.info(f"[{target}] DB 사진 존재 여부 사전 확인 결과: {photos_already_exist_in_db}")
                         if photos_already_exist_in_db:
-                            new_representative_photo_index = existing_base_info_for_rep_photo_idx.get('representative_photo_index')
-                            logger.info(f"[{target}] 기존 대표 사진 인덱스 ({new_representative_photo_index})를 사용합니다.")
-                        # else, new_representative_photo_index는 None으로 유지 (새로 수집 시 설정됨)
+                            new_total_photo_count = existing_base_info_for_photo_count.get('total_photo_count', 0)
+                            logger.info(f"[{target}] 기존 사진 개수 ({new_total_photo_count})를 사용합니다.")
+                        # else, new_total_photo_count는 0으로 유지 (새로 수집 시 설정됨)
                     except Exception as e_check_photo_early:
                         logger.error(f"[{target}] DB에서 사진 존재 여부 사전 확인 중 오류: {e_check_photo_early}. 사진 수집을 시도합니다.")
                         photos_already_exist_in_db = False # 오류 시 수집 시도
@@ -316,28 +350,37 @@ def process_single_auction_item(driver, wait, auction_list_page: AuctionListPage
 
         collected_photos_data = []
         pdf_path = None
+        is_scanned_pdf = False
         
         if not photos_already_exist_in_db:
             logger.info(f"[{target}] DB에 사진 정보가 없거나 확인할 수 없어 사진 및 PDF 수집을 진행합니다.")
-            collected_photos_data = _collect_photos(detail_page, full_auction_no, case_no_part, item_no_part)
-            if collected_photos_data:
-                # 새로 수집한 사진이 있으면 첫 번째 사진의 인덱스를 대표 인덱스로 설정 (예시)
-                new_representative_photo_index = collected_photos_data[0].get('index', 0) if isinstance(collected_photos_data[0].get('index'), int) else 0
-                logger.info(f"[{target}] 새 사진 {len(collected_photos_data)}개 수집 후 대표 사진 인덱스를 {new_representative_photo_index}(으)로 설정합니다.")
-            else:
-                logger.info(f"[{target}] 사진 수집을 시도했지만, 수집된 사진이 없습니다. 대표 사진 인덱스는 None입니다.")
-                new_representative_photo_index = None # 확실히 None으로
-
+            
+            # PDF 다운로드 먼저 수행하여 스캔본 여부 확인
             if config.DOWNLOAD_APPRAISAL_PDF:
                 if item_deadline.expired():
-                    logger.warning(f"[{target}] 사진 수집 후 아이템 처리 시간 초과로 PDF 다운로드 건너뜀.")
+                    logger.warning(f"[{target}] 아이템 처리 시간 초과로 PDF 다운로드 건너뜀.")
                 else:
-                    pdf_path = _download_pdf(detail_page, target)
+                    pdf_path, is_scanned_pdf = _download_pdf(detail_page, target)
                     if item_deadline.expired():
                         logger.warning(f"[{target}] 감정평가서 다운로드 중 아이템 처리 시간 초과.")
+            
+            # 스캔본인 경우에만 사진 수집
+            if is_scanned_pdf:
+                logger.info(f"[{target}] 스캔본 PDF이므로 차량 사진을 수집합니다.")
+                collected_photos_data = _collect_photos(detail_page, full_auction_no, case_no_part, item_no_part)
+                if collected_photos_data:
+                    # 새로 수집한 사진 개수를 total_photo_count로 설정
+                    new_total_photo_count = len(collected_photos_data)
+                    logger.info(f"[{target}] 새 사진 {len(collected_photos_data)}개 수집 후 총 사진 개수를 {new_total_photo_count}로 설정합니다.")
+                else:
+                    logger.info(f"[{target}] 사진 수집을 시도했지만, 수집된 사진이 없습니다. 총 사진 개수는 0입니다.")
+                    new_total_photo_count = 0
+            else:
+                logger.info(f"[{target}] 텍스트 기반 PDF이므로 차량 사진 수집을 건너뜁니다.")
+                new_total_photo_count = 0
         else:
-            logger.info(f"[{target}] DB에 이미 사진 정보가 존재하므로 사진 및 PDF 수집을 건너뜁니다. (기존 대표 사진 인덱스: {new_representative_photo_index})")
-            # new_representative_photo_index는 위에서 existing_base_info_for_rep_photo_idx.get()을 통해 이미 설정됨
+            logger.info(f"[{target}] DB에 이미 사진 정보가 존재하므로 사진 및 PDF 수집을 건너뜁니다. (기존 사진 개수: {new_total_photo_count})")
+            # new_total_photo_count는 위에서 existing_base_info_for_photo_count.get()을 통해 이미 설정됨
 
         # 상세 정보 파싱 (사진 수집 여부와 관계없이 항상 수행, collected_photos_data는 비어있을 수 있음)
         parsed_details = detail_page.parse_details(detail_html, target, item_no_part, collected_photos_data)
@@ -353,17 +396,18 @@ def process_single_auction_item(driver, wait, auction_list_page: AuctionListPage
             # --- 자식 테이블 데이터 삭제 (테이블명 직접 사용) ---
             tables_to_delete_always = [
                 "DateHistory", "SimilarSale", 
-                "AuctionDetailInfo", "AuctionAppraisalSummary"
+                "AuctionDetailInfo"
+                # "AuctionAppraisalSummary" - 리포트 추출에서 처리하므로 제거
             ]
             logger.debug(f"[{target}] DB 저장 전, 자식 테이블 기존 데이터 삭제 시도 ({', '.join(tables_to_delete_always)}).")
             for table_name in tables_to_delete_always:
                 delete_rows_by_auction_no(db_conn, table_name, target)
 
+            # PhotoURL 테이블이 삭제되었으므로 사진 개수만 total_photo_count에 저장됨
             if not photos_already_exist_in_db: 
-                logger.info(f"[{target}] 신규 사진을 처리하므로 기존 PhotoURL 테이블 데이터를 삭제합니다.")
-                delete_rows_by_auction_no(db_conn, "PhotoURL", target) 
+                logger.info(f"[{target}] 신규 사진을 처리하므로 total_photo_count를 업데이트합니다.")
             else: 
-                logger.info(f"[{target}] 기존 사진 데이터가 DB에 존재하므로 PhotoURL 테이블 삭제를 건너뜁니다.")
+                logger.info(f"[{target}] 기존 사진 데이터가 DB에 존재하므로 total_photo_count는 기존 값을 유지합니다.")
 
             # --- 데이터베이스 저장 ---
             base_info_to_save = {
@@ -385,16 +429,16 @@ def process_single_auction_item(driver, wait, auction_list_page: AuctionListPage
                 'car_transmission': parsed_details.get('car_transmission'),
                 'car_type': parsed_details.get('car_type'),
                 'manufacturer': parsed_details.get('manufacturer'),
-                'representative_photo_index': new_representative_photo_index 
+                'total_photo_count': new_total_photo_count 
             }
             logger.debug(f"[{target}] Value for appraisal_price before DB insert: {base_info_to_save.get('appraisal_price')}")
             insert_auction_base_info(db_conn, base_info_to_save)
 
+            # PhotoURL 테이블이 삭제되었으므로 사진 개수만 total_photo_count에 저장됨
             if collected_photos_data and not photos_already_exist_in_db:
-                logger.info(f"[{target}] 수집된 새 사진 {len(collected_photos_data)}개를 DB에 저장합니다.")
-                insert_photo_urls(db_conn, target, base_info.get('court_name'), collected_photos_data)
+                logger.info(f"[{target}] 수집된 새 사진 {len(collected_photos_data)}개가 total_photo_count에 저장됩니다.")
             elif not collected_photos_data and not photos_already_exist_in_db:
-                logger.info(f"[{target}] 수집된 새 사진이 없어 PhotoURL에 저장할 내용이 없습니다 (DB에도 원래 없었음).")
+                logger.info(f"[{target}] 수집된 새 사진이 없어 total_photo_count는 0으로 설정됩니다.")
             
             date_history_entries = parsed_details.get('parsed_auction_date_history', [])
             if date_history_entries:
@@ -443,19 +487,19 @@ def process_single_auction_item(driver, wait, auction_list_page: AuctionListPage
             else:
                 logger.info(f"[{target}] AuctionDetailInfo - 저장할 유효한 상세 정보가 없어 건너뜁니다.")
 
-            # AuctionAppraisalSummary 저장 로직
-            appraisal_summary_data = {}
-            for key, value in parsed_details.items():
-                if key.startswith("summary_"):
-                    appraisal_summary_data[key] = value
+            # AuctionAppraisalSummary 저장 로직 - 리포트 추출에서 처리하므로 주석 처리
+            # appraisal_summary_data = {}
+            # for key, value in parsed_details.items():
+            #     if key.startswith("summary_"):
+            #         appraisal_summary_data[key] = value
             
-            if appraisal_summary_data:
-                if not insert_or_update_appraisal_summary(db_conn, target, appraisal_summary_data):
-                    logger.warning(f"[{target}] AuctionAppraisalSummary 저장 실패.")
-                else:
-                    logger.info(f"[{target}] AuctionAppraisalSummary 저장 완료.")
-            else:
-                logger.info(f"[{target}] AuctionAppraisalSummary - appraisal_summary_data가 비어 있어 저장 건너뜀.")
+            # if appraisal_summary_data:
+            #     if not insert_or_update_appraisal_summary(db_conn, target, appraisal_summary_data):
+            #         logger.warning(f"[{target}] AuctionAppraisalSummary 저장 실패.")
+            #     else:
+            #         logger.info(f"[{target}] AuctionAppraisalSummary 저장 완료.")
+            # else:
+            #     logger.info(f"[{target}] AuctionAppraisalSummary - appraisal_summary_data가 비어 있어 저장 건너뜀.")
 
             similar_sales_data = parsed_details.get('parsed_similar_sales', [])
             if similar_sales_data:
@@ -719,7 +763,6 @@ def save_processed_auctions_to_db(db_conn, records):
     handlers = {
         "BaseInfo": insert_auction_base_info,
         "DateHistory": insert_auction_date_history,
-        "PhotoURL": insert_photo_urls,
         "DetailInfo": insert_auction_detail_info,
         "SimilarSale": insert_similar_sale,
     }
@@ -734,7 +777,7 @@ def save_processed_auctions_to_db(db_conn, records):
             # 루프 시작 시점에 처리할 필요 없는 최상위 키들을 먼저 건너뜀
             if name == "auction_no": 
                 continue
-            if name.startswith('summary_'): # 감정평가 요약 필드
+            if name.startswith('summary_'): # 감정평가 요약 필드 - 리포트 추출에서 처리하므로 건너뜀
                 continue
             if name in ['appraisal_pdf_path', '_is_existing_in_db']: # 기타 메타 필드
                 continue
@@ -752,14 +795,7 @@ def save_processed_auctions_to_db(db_conn, records):
                     logger.warning(f"[{auction_no}] court_name missing in BaseInfo for handler {name}. Using empty string.")
                     court_name_for_handler = ""
 
-                if name == "PhotoURL":
-                    photo_list_to_insert = data.get('photo_data_list', []) 
-                    if photo_list_to_insert:
-                        ok = fn(db_conn, auction_no, court_name_for_handler, photo_list_to_insert)
-                    else:
-                        # logger.debug(f"[{auction_no}] No photos found in PhotoURL data, skipping DB insert.") # 디버그 로그
-                        ok = True 
-                elif name == "DateHistory":
+                if name == "DateHistory":
                     if data: 
                         ok = fn(db_conn, auction_no, court_name_for_handler, data) 
                     else:
@@ -802,33 +838,34 @@ def save_processed_auctions_to_db(db_conn, records):
             except Exception as e_db_insert_group:
                 logger.error(f"[{auction_no}] DB insert error for {name} group: {e_db_insert_group}", exc_info=config.DEBUG)
         
-        summary_data_to_save = {
-            'auction_no': auction_no,
-            'summary_year_mileage': rec.get('summary_year_mileage'),
-            'summary_color': rec.get('summary_color'),
-            'summary_management_status': rec.get('summary_management_status'),
-            'summary_fuel': rec.get('summary_fuel'),
-            'summary_inspection_validity': rec.get('summary_inspection_validity'),
-            'summary_options_etc': rec.get('summary_options_etc'),
-        }
+        # AuctionAppraisalSummary 저장 로직 - 리포트 추출에서 처리하므로 주석 처리
+        # summary_data_to_save = {
+        #     'auction_no': auction_no,
+        #     'summary_year_mileage': rec.get('summary_year_mileage'),
+        #     'summary_color': rec.get('summary_color'),
+        #     'summary_management_status': rec.get('summary_management_status'),
+        #     'summary_fuel': rec.get('summary_fuel'),
+        #     'summary_inspection_validity': rec.get('summary_inspection_validity'),
+        #     'summary_options_etc': rec.get('summary_options_etc'),
+        # }
         
-        if any(summary_data_to_save[key] and summary_data_to_save[key] != '정보 없음' 
-               for key in summary_data_to_save if key != 'auction_no'):
-            try:
-                # db_manager 모듈을 직접 사용하여 함수 호출
-                if hasattr(db_manager, 'insert_or_update_appraisal_summary') and callable(getattr(db_manager, 'insert_or_update_appraisal_summary')):
-                    if db_manager.insert_or_update_appraisal_summary(db_conn, auction_no_pk=auction_no, summary_data=summary_data_to_save):
-                        # logger.debug(f"[{auction_no}] Successfully saved AppraisalSummary to DB.") # 디버그 로그
-                        pass # 성공 로그는 유지하지 않음
-                    else:
-                        logger.error(f"[{auction_no}] Failed to save AppraisalSummary to DB (handler returned false).")
-                else:
-                    logger.warning(f"[{auction_no}] db_manager.insert_or_update_appraisal_summary function not found. Skipping AppraisalSummary.")
-            except Exception as e_app_summary_insert:
-                logger.error(f"[{auction_no}] AppraisalSummary DB insert error: {e_app_summary_insert}", exc_info=config.DEBUG)
-        else:
-            # logger.debug(f"[{auction_no}] No specific data for AppraisalSummary fields, skipping DB insert.") # 디버그 로그
-            pass
+        # if any(summary_data_to_save[key] and summary_data_to_save[key] != '정보 없음' 
+        #        for key in summary_data_to_save if key != 'auction_no'):
+        #     try:
+        #         # db_manager 모듈을 직접 사용하여 함수 호출
+        #         if hasattr(db_manager, 'insert_or_update_appraisal_summary') and callable(getattr(db_manager, 'insert_or_update_appraisal_summary')):
+        #             if db_manager.insert_or_update_appraisal_summary(db_conn, auction_no_pk=auction_no, summary_data=summary_data_to_save):
+        #                 # logger.debug(f"[{auction_no}] Successfully saved AppraisalSummary to DB.") # 디버그 로그
+        #                 pass # 성공 로그는 유지하지 않음
+        #             else:
+        #                 logger.error(f"[{auction_no}] Failed to save AppraisalSummary to DB (handler returned false).")
+        #         else:
+        #             logger.warning(f"[{auction_no}] db_manager.insert_or_update_appraisal_summary function not found. Skipping AppraisalSummary.")
+        #     except Exception as e_app_summary_insert:
+        #         logger.error(f"[{auction_no}] AppraisalSummary DB insert error: {e_app_summary_insert}", exc_info=config.DEBUG)
+        # else:
+        #     # logger.debug(f"[{auction_no}] No specific data for AppraisalSummary fields, skipping DB insert.") # 디버그 로그
+        #     pass
 
     logger.info("Finished saving processed auction data to DB.")
 

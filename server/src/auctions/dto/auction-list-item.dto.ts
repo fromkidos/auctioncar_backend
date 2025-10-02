@@ -19,7 +19,7 @@ export class AuctionListItemDto {
   car_transmission: string | null;
   car_type: string | null;
   manufacturer: string | null;
-  representative_photo_index: number;
+  total_photo_count: number;
   image_url: string | null;
   appraisalSummary: AuctionAppraisalSummary | null;
   auctionResult: AuctionResult | null;

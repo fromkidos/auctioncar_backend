@@ -35,7 +35,7 @@ def main() -> int:
     print({
         "pdf": result.pdf_filename,
         "location": result.location_address,
-        "photos": len(result.photos_saved),
+        "appraisal_type": result.appraisal.type,
     })
     return 0
 

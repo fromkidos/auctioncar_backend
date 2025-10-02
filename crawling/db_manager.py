@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation # Decimal 타입 사용 위해 추
 import datetime # datetime 타입 사용 위해 추가
 import time # time 모듈 추가 (로그용)
 from contextlib import contextmanager # 추가
-from crawling_auction_result import car_auction_config as config # 경로 수정
+from crawling.crawling_auction_result import car_auction_config as config # 경로 수정
 import json # ADDED
 
 # .env 파일 경로 탐색 (이제 crawling 디렉토리에만 있다고 가정)
@@ -288,57 +288,58 @@ def insert_auction_date_history(db_conn, auction_no: str, court_name: str, date_
         traceback.print_exc()
         return False
 
-def insert_photo_urls(db_conn, auction_no: str, court_name: str, photo_data_list: list[dict]):
-    if not db_conn:
-        if config.DEBUG: print(f"DB 연결 실패: PhotoURL 삽입 불가 (auction_no: {auction_no})")
-        return False
-    try:
-        cur = db_conn.cursor()
-        success_count = 0
-        failure_count = 0
+# PhotoURL 테이블이 삭제되었으므로 함수 주석 처리
+# def insert_photo_urls(db_conn, auction_no: str, court_name: str, photo_data_list: list[dict]):
+#     if not db_conn:
+#         if config.DEBUG: print(f"DB 연결 실패: PhotoURL 삽입 불가 (auction_no: {auction_no})")
+#         return False
+#     try:
+#         cur = db_conn.cursor()
+#         success_count = 0
+#         failure_count = 0
 
-        sql = """
-        INSERT INTO "PhotoURL" (auction_no, court_name, photo_index, image_path_or_url) 
-        VALUES (%(auction_no)s, %(court_name)s, %(photo_index)s, %(image_path_or_url)s)
-        ON CONFLICT (auction_no, photo_index) DO NOTHING;
-        """
+#         sql = """
+#         INSERT INTO "PhotoURL" (auction_no, court_name, photo_index, image_path_or_url) 
+#         VALUES (%(auction_no)s, %(court_name)s, %(photo_index)s, %(image_path_or_url)s)
+#         ON CONFLICT (auction_no, photo_index) DO NOTHING;
+#         """
 
-        for photo_data in photo_data_list:
-            try:
-                image_path = photo_data.get('path')
-                photo_idx = photo_data.get('index')
+#         for photo_data in photo_data_list:
+#             try:
+#                 image_path = photo_data.get('path')
+#                 photo_idx = photo_data.get('index')
 
-                if image_path is None or photo_idx is None:
-                    print(f"오류: PhotoURL 데이터에 path 또는 index 누락. 항목 건너뜀: auction_no={auction_no}, data={photo_data}")
-                    failure_count += 1
-                    continue
+#                 if image_path is None or photo_idx is None:
+#                     print(f"오류: PhotoURL 데이터에 path 또는 index 누락. 항목 건너뜀: auction_no={auction_no}, data={photo_data}")
+#                     failure_count += 1
+#                     continue
 
-                params = {
-                    'auction_no': clean_string(auction_no),
-                    'court_name': clean_string(court_name),
-                    'photo_index': photo_idx,
-                    'image_path_or_url': clean_string(image_path)
-                }
+#                 params = {
+#                     'auction_no': clean_string(auction_no),
+#                     'court_name': clean_string(court_name),
+#                     'photo_index': photo_idx,
+#                     'image_path_or_url': clean_string(image_path)
+#                 }
 
-                if not params['auction_no'] or not params['image_path_or_url'] or not params['court_name']:
-                    print(f"오류: PhotoURL 필수 값 누락. 항목 건너뜀: {params}")
-                    failure_count += 1
-                    continue
+#                 if not params['auction_no'] or not params['image_path_or_url'] or not params['court_name']:
+#                     print(f"오류: PhotoURL 필수 값 누락. 항목 건너뜀: {params}")
+#                     failure_count += 1
+#                     continue
                 
-                cur.execute(sql, params)
-                if cur.rowcount > 0:
-                    success_count += 1
-            except Exception as item_e:
-                print(f"PhotoURL 항목 삽입 중 오류 (auction_no: {auction_no}, data: {photo_data}): {item_e}")
-                failure_count += 1
+#                 cur.execute(sql, params)
+#                 if cur.rowcount > 0:
+#                     success_count += 1
+#             except Exception as item_e:
+#                 print(f"PhotoURL 항목 삽입 중 오류 (auction_no: {auction_no}, data: {photo_data}): {item_e}")
+#                 failure_count += 1
 
-        cur.close()
-        return failure_count == 0
+#         cur.close()
+#         return failure_count == 0
 
-    except Exception as e:
-        db_conn.rollback()
-        print(f"insert_photo_urls 중 전체 오류 (auction_no: {auction_no}): {e}")
-        return False
+#     except Exception as e:
+#         db_conn.rollback()
+#         print(f"insert_photo_urls 중 전체 오류 (auction_no: {auction_no}): {e}")
+#         return False
 
 def insert_auction_detail_info(db_conn, data: dict):
     if not db_conn:
@@ -664,7 +665,7 @@ def get_auction_base_by_auction_no(db_conn, auction_no: str) -> dict | None:
     SELECT auction_no, case_year, case_number, item_no, court_name, 
            appraisal_price, min_bid_price, min_bid_price_2, sale_date, status, car_name,
            car_model_year, car_reg_number, car_mileage, car_fuel,
-           car_transmission, car_type, manufacturer, created_at, updated_at, representative_photo_index
+           car_transmission, car_type, manufacturer, created_at, updated_at, total_photo_count
     FROM "AuctionBaseInfo" 
     WHERE auction_no = %s;
     '''
@@ -691,7 +692,7 @@ def delete_rows_by_auction_no(db_conn, table_name: str, auction_no: str) -> bool
         if config.DEBUG: print(f"{time.strftime('%H:%M:%S')} - DB 연결 없어 {table_name} 삭제 불가 ({auction_no}) ")
         return False
     
-    allowed_tables = ["PhotoURL", "DateHistory", "SimilarSale", "AuctionDetailInfo", "AuctionAppraisalSummary"] 
+    allowed_tables = ["DateHistory", "SimilarSale", "AuctionDetailInfo", "AuctionAppraisalSummary"] 
     if table_name not in allowed_tables:
         print(f"오류: 허용되지 않은 테이블 이름입니다: {table_name}")
         return False
@@ -746,15 +747,19 @@ def check_photos_exist(db_conn, auction_no: str) -> bool:
             print(f"{time.strftime('%H:%M:%S')} - DB connection not available for check_photos_exist (auction_no: {auction_no}). Returning False, assuming photos don't exist or cannot be checked.")
         return False # 연결 없으면 False 반환 (사진 없다고 가정 또는 확인 불가)
 
-    query = 'SELECT 1 FROM "PhotoURL" WHERE auction_no = %s LIMIT 1;'
+    query = 'SELECT total_photo_count FROM "AuctionBaseInfo" WHERE auction_no = %s;'
     
     try:
         with db_conn.cursor() as cursor:
             cursor.execute(query, (auction_no,))
-            exists = cursor.fetchone() is not None
-            if config.DEBUG:
-                print(f"{time.strftime('%H:%M:%S')} - check_photos_exist for {auction_no}: {'Exists' if exists else 'Does not exist'}")
-            return exists
+            result = cursor.fetchone()
+            if result:
+                total_photo_count = result[0] or 0
+                exists = total_photo_count > 0
+                if config.DEBUG:
+                    print(f"{time.strftime('%H:%M:%S')} - check_photos_exist for {auction_no}: {'Exists' if exists else 'Does not exist'} (count: {total_photo_count})")
+                return exists
+            return False
     except Exception as e:
         print(f"{time.strftime('%H:%M:%S')} - Error in check_photos_exist for {auction_no}: {e}")
         # 오류 발생 시, 사진이 없다고 가정하거나 또는 호출 측에서 오류를 인지하도록 False 반환

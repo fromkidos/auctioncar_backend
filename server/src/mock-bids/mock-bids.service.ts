@@ -191,7 +191,6 @@ export class MockBidsService {
       include: {
         auction: {
           include: {
-            photoUrls: true, // PhotoURL 관계를 포함
             auctionResult: true, // 경매결과 정보 포함
           },
         },
@@ -200,16 +199,13 @@ export class MockBidsService {
 
     return mockBids.map((bid) => {
       const { auction, ...restOfBid } = bid;
-      const representativeImage = auction.photoUrls.find(
-        (p) => p.photo_index === auction.representative_photo_index,
-      );
 
       return {
         ...restOfBid,
         auctionBaseInfo: {
           ...auction,
           id: auction.auction_no,
-          image_url: representativeImage?.image_path_or_url ?? null,
+          image_url: null, // 클라이언트에서 직접 URL 구성
         },
       };
     });

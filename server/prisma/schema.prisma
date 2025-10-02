@@ -26,7 +26,7 @@ model AuctionBaseInfo {
   car_type                   String?
   manufacturer               String?
   min_bid_price_2            BigInt?
-  representative_photo_index Int                         @default(0)
+  total_photo_count          Int                         @default(0)
   created_at                 DateTime                    @default(now())
   updated_at                 DateTime                    @default(now()) @updatedAt
   analysisAccesses           AuctionAnalysisAccess[]
@@ -36,7 +36,6 @@ model AuctionBaseInfo {
   auctionUserActivities      AuctionUserActivity[]
   dateHistories              DateHistory[]
   mockBids                   MockBid[]
-  photoUrls                  PhotoURL[]
   similarSales               SimilarSale[]
   vehicleComprehensiveReport VehicleComprehensiveReport?
 
@@ -91,17 +90,6 @@ model DateHistory {
   @@index([court_name])
 }
 
-model PhotoURL {
-  id                Int             @id @default(autoincrement())
-  auction_no        String
-  court_name        String
-  photo_index       Int
-  image_path_or_url String
-  auctionBaseInfo   AuctionBaseInfo @relation(fields: [auction_no], references: [auction_no], onDelete: Cascade)
-
-  @@unique([auction_no, photo_index], name: "auction_photo_index_unique")
-  @@index([auction_no])
-}
 
 model SimilarSale {
   id                      Int             @id @default(autoincrement())

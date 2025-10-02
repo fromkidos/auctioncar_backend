@@ -33,4 +33,4 @@ class ReportExtractionResult:
     pdf_filename: str
     location_address: Optional[str]
     appraisal: AppraisalFields
-    photos_saved: List[str]
+    # photos_saved 제거 - DB에 total_photo_count로 저장됨

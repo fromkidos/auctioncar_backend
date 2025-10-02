@@ -8,7 +8,6 @@ import { Prisma } from '@prisma/client';
 
 // 임시로 any 타입 사용 - Prisma 클라이언트 타입 재생성 후 수정 필요
 type AuctionBaseInfo = any;
-type PhotoURL = any;
 type AuctionDetailInfo = any;
 type DateHistory = any;
 type SimilarSale = any;
@@ -106,10 +105,6 @@ function convertDataForClient(obj: any, visitedObjects = new WeakSet(), depth = 
 }
 
 const fullAuctionInclude = {
-  photoUrls: { 
-    orderBy: { photo_index: 'asc' as const },
-    take: 50, // 이미지 수 제한
-  },
   detailInfo: true,
   dateHistories: { 
     orderBy: { date_time: 'asc' as const },
@@ -126,7 +121,6 @@ const fullAuctionInclude = {
 } as const;
 
 export type FullAuction = AuctionBaseInfo & {
-  photoUrls: PhotoURL[];
   detailInfo: AuctionDetailInfo | null;
   dateHistories: DateHistory[];
   similarSales: SimilarSale[];
@@ -137,7 +131,6 @@ export type FullAuction = AuctionBaseInfo & {
 
 // Prisma의 AuctionBaseInfo & 관련 모델 타입을 위한 인터페이스 확장 (DTO 변환 전 단계)
 interface AuctionBaseInfoWithRelations extends AuctionBaseInfo {
-  photoUrls: PhotoURL[];
   detailInfo?: AuctionDetailInfo | null;
   dateHistories: DateHistory[];
   similarSales: SimilarSale[];
@@ -156,58 +149,7 @@ export class AuctionsService {
     private readonly configService: ConfigService,
   ) {}
 
-  private toWebImageUrl(dbFilePath: string | null | undefined): string | null {
-
-  try {
-    if (!dbFilePath) {
-      return null;
-    }
-    
-    // 이미 완전한 URL인 경우 그대로 반환 (예: 외부 이미지 URL)
-    if (dbFilePath.startsWith('http://') || dbFilePath.startsWith('https://')) {
-      return dbFilePath;
-    }
-
-    const serverBaseUrl = this.configService.get<string>('SERVER_BASE_URL') || 
-      `http://${this.configService.get<string>('HOST', '127.0.0.1')}:${this.configService.get<string>('PORT', '4000')}`;
-    const staticPrefix = '/static';
-    const imageBasePath = '/uploads/auction_images/';
-    
-    // dbFilePath가 혹시라도 전체 경로를 포함하고 있다면 파일명만 추출 (일반적으로는 파일명만 저장되어 있을 것으로 예상)
-    const filename = dbFilePath.includes('/') ? dbFilePath.substring(dbFilePath.lastIndexOf('/') + 1) : dbFilePath;
-
-    const finalUrl = `${serverBaseUrl}${staticPrefix}${imageBasePath}${filename}`;
-    return finalUrl;
-  } catch (error) {
-    this.logger.error(`[toWebImageUrl] Error generating web URL for: ${dbFilePath}`, error);
-    return null;
-  }
-
-    // try {
-    //   if (!dbFilePath) {
-    //     return null;
-    //   }
-      
-    //   // 이미 완전한 URL인 경우 그대로 반환 (예: 외부 이미지 URL)
-    //   if (dbFilePath.startsWith('http://') || dbFilePath.startsWith('https://')) {
-    //     return dbFilePath;
-    //   }
-
-    //   const serverBaseUrl = this.configService.get<string>('SERVER_BASE_URL') || 
-    //     `http://${this.configService.get<string>('HOST', '127.0.0.1')}:${this.configService.get<string>('PORT', '4000')}`;
-    //   const staticPrefix = '/static';
-    //   const imageBasePath = '/uploads/auction_images/';
-      
-    //   // dbFilePath가 혹시라도 전체 경로를 포함하고 있다면 파일명만 추출 (일반적으로는 파일명만 저장되어 있을 것으로 예상)
-    //   const filename = dbFilePath.includes('/') ? dbFilePath.substring(dbFilePath.lastIndexOf('/') + 1) : dbFilePath;
-
-    //   const finalUrl = `${serverBaseUrl}${staticPrefix}${imageBasePath}${filename}`;
-    //   return finalUrl;
-    // } catch (error) {
-    //   this.logger.error(`[toWebImageUrl] Error generating web URL for: ${dbFilePath}`, error);
-    //   return null;
-    // }
-  }
+  // toWebImageUrl 메소드 제거 - 클라이언트에서 직접 URL 구성
 
 
 
@@ -226,10 +168,6 @@ export class AuctionsService {
 
   // 이 서비스 내에서만 사용되는 DTO 변환 함수
   private toAuctionListItemDto(auction: FullAuction): AuctionListItemDto {
-    const webAccessibleImageUrl = (auction.photoUrls && auction.photoUrls.length > 0)
-      ? this.toWebImageUrl(auction.photoUrls[auction.representative_photo_index]?.image_path_or_url ?? auction.photoUrls[0].image_path_or_url)
-      : null;
-
     // 상세 정보와 동일하게 날짜 조정 로직 추가
     const adjustedSaleDate = adjustDateForKstInterpretation(auction.sale_date);
 
@@ -252,8 +190,8 @@ export class AuctionsService {
       car_transmission: auction.car_transmission,
       car_type: auction.car_type,
       manufacturer: auction.manufacturer,
-      representative_photo_index: auction.representative_photo_index,
-      image_url: webAccessibleImageUrl,
+      total_photo_count: auction.total_photo_count, // 클라이언트가 이미지 URL을 직접 구성할 수 있도록 개수만 제공
+      image_url: null, // 이미지 URL은 클라이언트에서 직접 구성
       appraisalSummary: auction.appraisalSummary,
       auctionResult: auction.auctionResult,
     };
@@ -335,7 +273,7 @@ export class AuctionsService {
   async getUserFavorites(userId: string): Promise<AuctionUserActivityDto[]> {
     return this.prisma.auctionUserActivity.findMany({
       where: { userId, isFavorite: true },
-      include: { auction: { include: { photoUrls: { orderBy: {photo_index: 'asc'}} } } } 
+      include: { auction: { include: fullAuctionInclude } } 
     });
   }
 
@@ -472,22 +410,15 @@ export class AuctionsService {
         },
         include: {
           auction: { // 'auctionBaseInfo' -> 'auction'
-            include: {
-              photoUrls: {
-                orderBy: { photo_index: 'asc' },
-              },
-            },
+            include: fullAuctionInclude,
           },
         },
       }).then(results => results.map(result => {
           const baseInfo = (result as any).auction;
           if (baseInfo) {
-            const representativePhoto = baseInfo.photoUrls.find(p => p.photo_index === baseInfo.representative_photo_index) 
-                                      ?? baseInfo.photoUrls[0];
-            
             (result as any).auctionBaseInfo = {
               ...baseInfo,
-              image_url: this.toWebImageUrl(representativePhoto?.image_path_or_url)
+              image_url: null // 이미지 URL은 클라이언트에서 직접 구성
             };
             delete (result as any).auction; // 원래의 'auction' 필드는 삭제
           }
@@ -576,7 +507,7 @@ export class AuctionsService {
       const adjustedSaleDate = adjustDateForKstInterpretation(baseInfoData.sale_date);
 
       // 5. 데이터 구조 분해
-      const { detailInfo, dateHistories, photoUrls, similarSales, analysisAccesses, ...restOfBaseInfo } = baseInfoData;
+      const { detailInfo, dateHistories, similarSales, analysisAccesses, ...restOfBaseInfo } = baseInfoData;
       
       // 6. 클라이언트용 데이터 준비
       const clientReadyBaseInfo = {
@@ -602,23 +533,16 @@ export class AuctionsService {
 
       const isFavorite = userActivity?.isFavorite ?? false;
 
-      // 9. 이미지 URL 처리
-      const processedPhotoUrls = (photoUrls || []).map((p, index) => {
-        try {
-          //const webUrl = this.toWebImageUrl(p.image_path_or_url);
-          const webUrl = p.image_path_or_url;
-          return {
-            ...p,
-            image_path_or_url: webUrl,
-          };
-        } catch (error) {
-          this.logger.error(`[getAuctionDetailWithView] Error processing photo URL ${index} for auction ${auction_no}:`, error);
-          return {
-            ...p,
-            image_path_or_url: null,
-          };
-        }
-      });
+      // 9. 이미지 정보 처리 - total_photo_count만 제공, URL은 클라이언트에서 구성
+      const processedPhotoUrls: Array<{ photo_index: number; image_path_or_url: string | null; }> = [];
+      const totalPhotos = baseInfoData.total_photo_count || 0;
+      
+      for (let i = 0; i < totalPhotos; i++) {
+        processedPhotoUrls.push({
+          photo_index: i,
+          image_path_or_url: null, // 클라이언트에서 직접 URL 구성
+        });
+      }
 
       // 10. 최종 데이터 구조 생성
       const finalDataStructure = { 
