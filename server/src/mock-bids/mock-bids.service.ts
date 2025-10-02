@@ -192,6 +192,7 @@ export class MockBidsService {
         auction: {
           include: {
             photoUrls: true, // PhotoURL 관계를 포함
+            auctionResult: true, // 경매결과 정보 포함
           },
         },
       },
