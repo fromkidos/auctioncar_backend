@@ -4,8 +4,8 @@
 import re
 from typing import List, Optional
 import fitz
-from utils import split_lines, clean_text
-from models import AppraisalFields
+from .utils import split_lines, clean_text
+from .models import AppraisalFields
 
 
 class AppraisalExtractor:

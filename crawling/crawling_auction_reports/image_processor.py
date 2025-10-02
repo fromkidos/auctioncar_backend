@@ -5,7 +5,7 @@ import os
 import fitz
 from typing import List, Tuple
 from PIL import Image, ImageOps
-from utils import trim_image_whitespace, crop_image_edges
+from .utils import trim_image_whitespace, crop_image_edges
 
 
 class ImageProcessor:

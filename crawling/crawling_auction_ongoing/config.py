@@ -49,6 +49,7 @@ URL_ONGOING_LIST_KEYWORD = os.getenv('URL_ONGOING_LIST_KEYWORD', "SrchList.do") 
 SEARCH_FORM_TABLE_ID = 'mf_wfm_mainFrame_wq_uuid_335'
 CASE_YEAR_SELECT_ID = 'mf_wfm_mainFrame_sbx_carTmidCsNo'
 COURT_SELECT_ID = 'mf_wfm_mainFrame_sbx_carTmidCortOfc'
+CASE_NUMBER_INPUT_ID = 'mf_wfm_mainFrame_txt_carTmidCsNo'  # 사건번호 입력 필드
 SEARCH_BUTTON_ID = 'mf_wfm_mainFrame_btn_srchCarTmid'
 
 # Results List / Pagination Elements

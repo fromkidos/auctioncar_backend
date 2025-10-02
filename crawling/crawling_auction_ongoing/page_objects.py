@@ -1,4 +1,4 @@
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException, ElementClickInterceptedException
@@ -11,6 +11,7 @@ from selenium.webdriver.support.select import Select
 import re
 import math
 import base64
+from typing import Optional
 
 from . import config # 상대 경로로 config 임포트
 from .parsers import parse_detail_page, parse_ongoing_list
@@ -780,6 +781,51 @@ class AuctionListPage(BasePage):
         logger.error(f"All click strategies failed for Case Text: '{display_case_text}', Item No: '{item_no_text}', Index: {item_index_on_page_for_onclick_fallback}. Last error from attempts: {last_error_from_fallbacks}")
         return False # 모든 전략 실패
 
+    @retry(attempts=3, delay_seconds=2, backoff_factor=1.5, exceptions_to_catch=(TimeoutException, NoSuchElementException))
+    def search_auction_by_criteria(self, court_name: str, case_year: str, case_number: str) -> bool:
+        """특정 조건으로 경매 검색"""
+        try:
+            logger.info(f"검색 조건 설정: 법원={court_name}, 연도={case_year}, 사건번호={case_number}")
+            
+            # 법원 선택
+            if court_name and court_name != "전체":
+                court_elem = self.wait.until(EC.element_to_be_clickable((By.ID, config.COURT_SELECT_ID)))
+                Select(court_elem).select_by_visible_text(court_name)
+                logger.debug(f"법원 선택: {court_name}")
+            
+            # 사건년도 선택
+            if case_year:
+                year_elem = self.wait.until(EC.element_to_be_clickable((By.ID, config.CASE_YEAR_SELECT_ID)))
+                Select(year_elem).select_by_visible_text(case_year)
+                logger.debug(f"사건년도 선택: {case_year}")
+            
+            # 사건번호 입력 (필요한 경우)
+            if case_number:
+                # 사건번호 입력 필드가 있다면 입력 (config에서 확인 필요)
+                case_number_input_id = getattr(config, 'CASE_NUMBER_INPUT_ID', None)
+                if case_number_input_id:
+                    case_number_elem = self.wait.until(EC.element_to_be_clickable((By.ID, case_number_input_id)))
+                    case_number_elem.clear()
+                    case_number_elem.send_keys(case_number)
+                    logger.debug(f"사건번호 입력: {case_number}")
+            
+            # 검색 버튼 클릭
+            search_btn = self.wait.until(EC.element_to_be_clickable((By.ID, config.SEARCH_BUTTON_ID)))
+            self.driver.execute_script("arguments[0].click();", search_btn)
+            logger.debug("검색 버튼 클릭")
+            
+            # 결과 그리드 대기
+            if self.wait_for_grid():
+                logger.info("검색 완료 및 결과 그리드 로드 확인")
+                return True
+            else:
+                logger.error("검색 후 그리드 로드 실패")
+                return False
+                
+        except Exception as e:
+            logger.error(f"검색 중 오류 발생: {e}", exc_info=True)
+            return False
+
 
 class AuctionDetailPage(BasePage):
     def __init__(self, driver, wait):
@@ -1322,3 +1368,96 @@ class AuctionDetailPage(BasePage):
             self.logger.error(f"An unexpected error occurred in go_back_to_list_page: {e}", exc_info=True)
             self._debug_save_page_source("go_back_unexpected_error.html")
             return False
+
+    @retry(attempts=3, delay_seconds=2, backoff_factor=1.5, exceptions_to_catch=(TimeoutException, NoSuchElementException))
+    def search_auction_by_criteria(self, court_name: str, case_year: str, case_number: str) -> bool:
+        """특정 조건으로 경매 검색"""
+        try:
+            logger.info(f"검색 조건 설정: 법원={court_name}, 연도={case_year}, 사건번호={case_number}")
+            
+            # 법원 선택
+            if court_name and court_name != "전체":
+                court_elem = self.wait.until(EC.element_to_be_clickable((By.ID, config.COURT_SELECT_ID)))
+                Select(court_elem).select_by_visible_text(court_name)
+                logger.debug(f"법원 선택: {court_name}")
+            
+            # 사건년도 선택
+            if case_year:
+                year_elem = self.wait.until(EC.element_to_be_clickable((By.ID, config.CASE_YEAR_SELECT_ID)))
+                Select(year_elem).select_by_visible_text(case_year)
+                logger.debug(f"사건년도 선택: {case_year}")
+            
+            # 사건번호 입력 (필요한 경우)
+            if case_number:
+                # 사건번호 입력 필드가 있다면 입력 (config에서 확인 필요)
+                case_number_input_id = getattr(config, 'CASE_NUMBER_INPUT_ID', None)
+                if case_number_input_id:
+                    case_number_elem = self.wait.until(EC.element_to_be_clickable((By.ID, case_number_input_id)))
+                    case_number_elem.clear()
+                    case_number_elem.send_keys(case_number)
+                    logger.debug(f"사건번호 입력: {case_number}")
+            
+            # 검색 버튼 클릭
+            search_btn = self.wait.until(EC.element_to_be_clickable((By.ID, config.SEARCH_BUTTON_ID)))
+            self.driver.execute_script("arguments[0].click();", search_btn)
+            logger.debug("검색 버튼 클릭")
+            
+            # 결과 그리드 대기
+            if self.wait_for_grid():
+                logger.info("검색 완료 및 결과 그리드 로드 확인")
+                return True
+            else:
+                logger.error("검색 후 그리드 로드 실패")
+                return False
+                
+        except Exception as e:
+            logger.error(f"검색 중 오류 발생: {e}", exc_info=True)
+            return False
+
+    @retry(attempts=3, delay_seconds=2, backoff_factor=1.5, exceptions_to_catch=(TimeoutException, NoSuchElementException))
+    def go_to_detail_page_by_item_no(self, item_no: str) -> Optional['AuctionDetailPage']:
+        """물건번호로 상세 페이지 이동"""
+        try:
+            logger.info(f"물건번호 {item_no}으로 상세 페이지 이동 시도")
+            
+            # 현재 페이지의 모든 아이템 가져오기
+            current_page_items = self.get_current_page_items(1)  # 현재 페이지 번호는 1로 가정
+            
+            # 해당 물건번호 찾기
+            target_item = None
+            for item in current_page_items:
+                if str(item.get('item_no', '')) == str(item_no):
+                    target_item = item
+                    break
+            
+            if not target_item:
+                logger.error(f"물건번호 {item_no}에 해당하는 경매를 찾을 수 없음")
+                return None
+            
+            # 상세 페이지로 이동
+            display_case_text = target_item.get('display_case_text', '')
+            item_no_text = str(item_no)
+            full_auction_no = target_item.get('auction_no', '')
+            case_year = target_item.get('case_year', '')
+            case_number = target_item.get('case_number', '')
+            item_index = target_item.get('item_index_on_page', 0)
+            
+            if self.click_item_detail_link(
+                display_case_text, item_no_text, full_auction_no, 
+                case_year, case_number, item_index
+            ):
+                # AuctionDetailPage 생성 및 반환
+                detail_page = AuctionDetailPage(self.driver, self.wait)
+                if detail_page.wait_for_detail_page_load():
+                    logger.info(f"상세 페이지 로드 완료: {full_auction_no}")
+                    return detail_page
+                else:
+                    logger.error("상세 페이지 로드 실패")
+                    return None
+            else:
+                logger.error("상세 페이지 링크 클릭 실패")
+                return None
+                
+        except Exception as e:
+            logger.error(f"상세 페이지 이동 중 오류: {e}", exc_info=True)
+            return None

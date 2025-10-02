@@ -5,8 +5,9 @@ import os
 import sys
 from typing import List, Optional
 import fitz
-from image_processor import ImageProcessor
-from utils import extract_auction_number
+from .image_processor import ImageProcessor
+from .utils import extract_auction_number
+from .scan_processor import ScanProcessor
 
 
 class PhotoExtractor:
@@ -120,7 +121,11 @@ class PhotoExtractor:
                     )
                     saved_images.extend(images)
         else:
-            # 스캔본: 경매 사이트에서 사진 다운로드
-            saved_images = self._download_photos_from_auction_site()
+            # 스캔본: ScanProcessor를 사용하여 경매 사이트에서 사진 다운로드
+            scan_processor = ScanProcessor(self.doc, self.output_root)
+            try:
+                saved_images = scan_processor.process_scan_pdf(pdf_filename)
+            finally:
+                scan_processor.close()
         
         return saved_images

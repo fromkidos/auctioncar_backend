@@ -4,7 +4,7 @@
 import re
 from typing import List, Optional
 import fitz
-from utils import split_lines, clean_location_address, is_valid_address
+from .utils import split_lines, clean_location_address, is_valid_address
 
 
 class AddressExtractor:

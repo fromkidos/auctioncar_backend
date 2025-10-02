@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation # Decimal 타입 사용 위해 추
 import datetime # datetime 타입 사용 위해 추가
 import time # time 모듈 추가 (로그용)
 from contextlib import contextmanager # 추가
-from .crawling_auction_result import car_auction_config as config # 경로 수정
+from crawling_auction_result import car_auction_config as config # 경로 수정
 import json # ADDED
 
 # .env 파일 경로 탐색 (이제 crawling 디렉토리에만 있다고 가정)
