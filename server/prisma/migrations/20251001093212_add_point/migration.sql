@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "detailViewCredits" INTEGER NOT NULL DEFAULT 10,
+ALTER COLUMN "points" SET DEFAULT 30;
