@@ -50,6 +50,15 @@ def save_images_to_upload_dir(extracted_dir: str, upload_dir: str, auction_no: s
         dst_path = os.path.join(auction_upload_dir, f"{auction_no}_{i}.png")
         shutil.copy2(src_path, dst_path)
     
+    # 복사 완료 후 extracted 폴더의 이미지들 삭제 (다른 경매와의 충돌 방지)
+    for image_file in image_files:
+        src_path = os.path.join(photos_dir, image_file)
+        try:
+            os.remove(src_path)
+            print(f"임시 이미지 삭제: {image_file}")
+        except Exception as e:
+            print(f"이미지 삭제 실패: {image_file} - {e}")
+    
     return len(image_files)
 
 def save_to_database(metadata: Dict[str, Any], auction_no: str) -> bool:

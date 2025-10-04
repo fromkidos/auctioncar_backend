@@ -1065,11 +1065,13 @@ class AuctionDetailPage(BasePage):
             
         processed_photo_objects = []
         try:
+            # 경매별 폴더 생성
+            auction_specific_dir = os.path.join(config.IMAGE_STORAGE_PATH, case_no_for_log)
             processed_photo_objects = self._process_collected_image_sources(
                 image_sources=sorted(list(all_collected_image_srcs)),
                 auction_id_for_filename=case_no_for_log, 
                 item_no_for_filename=item_no_for_log,
-                save_dir=config.IMAGE_STORAGE_PATH
+                save_dir=auction_specific_dir
             )
         except Exception as e_process_src: # _process_collected_image_sources 호출 자체의 오류
             local_logger.error(f"PHOTO_ERROR ([{case_no_for_log}-{item_no_for_log}]): Error calling _process_collected_image_sources: {e_process_src}", exc_info=config.DEBUG)

@@ -191,7 +191,6 @@ export class AuctionsService {
       car_type: auction.car_type,
       manufacturer: auction.manufacturer,
       total_photo_count: auction.total_photo_count, // 클라이언트가 이미지 URL을 직접 구성할 수 있도록 개수만 제공
-      image_url: null, // 이미지 URL은 클라이언트에서 직접 구성
       appraisalSummary: auction.appraisalSummary,
       auctionResult: auction.auctionResult,
     };
@@ -417,8 +416,7 @@ export class AuctionsService {
           const baseInfo = (result as any).auction;
           if (baseInfo) {
             (result as any).auctionBaseInfo = {
-              ...baseInfo,
-              image_url: null // 이미지 URL은 클라이언트에서 직접 구성
+              ...baseInfo
             };
             delete (result as any).auction; // 원래의 'auction' 필드는 삭제
           }
@@ -533,23 +531,11 @@ export class AuctionsService {
 
       const isFavorite = userActivity?.isFavorite ?? false;
 
-      // 9. 이미지 정보 처리 - total_photo_count만 제공, URL은 클라이언트에서 구성
-      const processedPhotoUrls: Array<{ photo_index: number; image_path_or_url: string | null; }> = [];
-      const totalPhotos = baseInfoData.total_photo_count || 0;
-      
-      for (let i = 0; i < totalPhotos; i++) {
-        processedPhotoUrls.push({
-          photo_index: i,
-          image_path_or_url: null, // 클라이언트에서 직접 URL 구성
-        });
-      }
-
-      // 10. 최종 데이터 구조 생성
+      // 9. 최종 데이터 구조 생성
       const finalDataStructure = { 
         baseInfo: clientReadyBaseInfo, 
         detailInfo: clientReadyDetailInfo, 
-        dateHistories: clientReadyDateHistories, 
-        photoUrls: processedPhotoUrls,
+        dateHistories: clientReadyDateHistories,
         similarSales: (similarSales || []).map(sale => {
           try {
             return convertDataForClient(sale);

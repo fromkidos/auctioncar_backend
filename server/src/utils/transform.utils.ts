@@ -1,4 +1,3 @@
-import { ConfigService } from '@nestjs/config';
 
 export function convertDataForClient(obj: any, visitedObjects = new WeakSet(), depth = 0): any {
   // 순환 참조 및 깊이 제한 보호
@@ -58,34 +57,3 @@ export function convertDataForClient(obj: any, visitedObjects = new WeakSet(), d
     visitedObjects.delete(obj);
   }
 }
-
-export function toWebImageUrl(dbFilePath: string | null | undefined, configService: ConfigService): string | null {
-  try {
-    const serverBaseUrl = configService.get<string>('SERVER_BASE_URL');
-    
-    if (!dbFilePath) {
-      return null;
-    }
-    
-    // 이미 완전한 URL인 경우 그대로 반환
-    if (dbFilePath.startsWith('http://') || dbFilePath.startsWith('https://')) {
-      return dbFilePath;
-    }
-
-    const staticPrefix = '/static';
-    const imageBasePath = '/uploads/auction_images/';
-    
-    const filename = dbFilePath.includes('/') ? dbFilePath.substring(dbFilePath.lastIndexOf('/') + 1) : dbFilePath;
-
-    if (!serverBaseUrl) {
-      console.error('SERVER_BASE_URL is not defined in environment variables');
-      return null;
-    }
-
-    const finalUrl = `${serverBaseUrl}${staticPrefix}${imageBasePath}${filename}`;
-    return finalUrl;
-  } catch (error) {
-    console.error(`Error generating web URL for: ${dbFilePath}`, error);
-    return null;
-  }
-} 

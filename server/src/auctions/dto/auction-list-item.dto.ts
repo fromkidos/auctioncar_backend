@@ -20,7 +20,6 @@ export class AuctionListItemDto {
   car_type: string | null;
   manufacturer: string | null;
   total_photo_count: number;
-  image_url: string | null;
   appraisalSummary: AuctionAppraisalSummary | null;
   auctionResult: AuctionResult | null;
   // 필요시 관계형 데이터도 추가

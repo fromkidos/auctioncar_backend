@@ -205,7 +205,6 @@ export class MockBidsService {
         auctionBaseInfo: {
           ...auction,
           id: auction.auction_no,
-          image_url: null, // 클라이언트에서 직접 URL 구성
         },
       };
     });
